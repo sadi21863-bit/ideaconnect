@@ -53,27 +53,34 @@ function ctx(item: AIQueue): Ctx {
  * Prompts are intentionally simple for Week 2 — Week 3+ will add
  * richer context (e.g., thread history, recent archives).
  */
-export function buildPrompt(item: AIQueue, researchInjection = ""): string {
+export function buildPrompt(item: AIQueue, researchInjection = "", memoryBlock = ""): string {
   // comment actions route based on kind
+  let base: string;
   if (item.actionType === "comment") {
     const c = (item.promptContext as Record<string, unknown>) ?? {};
-    if (c.kind === "debate_reply") return buildDebateReplyPrompt(item, researchInjection);
-    return buildCommentPrompt(item, researchInjection);
+    if (c.kind === "debate_reply") base = buildDebateReplyPrompt(item, researchInjection);
+    else base = buildCommentPrompt(item, researchInjection);
+  } else {
+    switch (item.actionType) {
+      case "theme_select":   base = buildThemeSelectPrompt(item); break;
+      case "post_idea":      base = buildPostIdeaPrompt(item); break;
+      case "quality_review": base = buildQualityReviewPrompt(item, researchInjection); break;
+      // archive_day, quality_review_archive, memory_reflect: self-contained
+      // in executor — never reach buildPrompt
+      case "themeresearch":
+      case "archive_day":
+      case "quality_review_archive":
+      case "rollup_week":
+      case "rollup_month":
+      case "memory_reflect":
+        throw new Error(`${item.actionType} is self-contained and should not reach buildPrompt`);
+      default:
+        throw new Error(`No prompt template for action type: ${item.actionType}`);
+    }
   }
-  switch (item.actionType) {
-    case "theme_select":   return buildThemeSelectPrompt(item);
-    case "post_idea":      return buildPostIdeaPrompt(item);
-    case "quality_review": return buildQualityReviewPrompt(item, researchInjection);
-    // archive_day, quality_review_archive: self-contained in executor — never reach buildPrompt
-    case "themeresearch":
-    case "archive_day":
-    case "quality_review_archive":
-    case "rollup_week":
-    case "rollup_month":
-      throw new Error(`${item.actionType} is self-contained and should not reach buildPrompt`);
-    default:
-      throw new Error(`No prompt template for action type: ${item.actionType}`);
-  }
+  // Memory block goes first: lived context before the task, so output-format
+  // instructions at the end of each builder still close the prompt.
+  return memoryBlock ? `${memoryBlock}\n\n---\n\n${base}` : base;
 }
 
 function buildThemeSelectPrompt(item: AIQueue): string {

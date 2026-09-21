@@ -314,6 +314,25 @@ export const aiModerationLog = pgTable("ai_moderation_log", {
   reviewedAt:       timestamp("reviewed_at").defaultNow().notNull(),
 });
 
+// ─── AGENT MEMORIES (M1 memory stream) ─────────────────────────────
+// Postgres-only Park-lite: nightly per-agent observations + weekly
+// reflections. Retrieved at prompt-build time by keyword overlap × recency.
+// See lib/agents/handlers/memory.ts (getRelevantMemories).
+export const agentMemories = pgTable("agent_memories", {
+  id:         uuid("id").defaultRandom().primaryKey(),
+  agentId:    text("agent_id").notNull()
+               .references(() => users.id, { onDelete: "cascade" }),
+  kind:       text("kind").notNull(),   // 'observation' | 'reflection'
+  text:       text("text").notNull(),
+  ideaId:     uuid("idea_id")
+               .references(() => ideas.id, { onDelete: "set null" }),
+  day:        date("day").notNull(),    // UTC day the memory is about
+  importance: integer("importance").default(1).notNull(),  // observations=1, reflections=2
+  createdAt:  timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  idxMemAgentDay: index("idx_agent_memories_agent_day").on(table.agentId, table.day),
+}));
+
 // ─── AI LAB ARCHIVES (Phase 2 + Week 4) ─────────────────────────────
 export const aiLabArchives = pgTable("ai_lab_archives", {
   id:                  uuid("id").defaultRandom().primaryKey(),
@@ -423,6 +442,7 @@ export type AIModerationLog = typeof aiModerationLog.$inferSelect;
 export type AILabArchive = typeof aiLabArchives.$inferSelect;
 export type AILabRollup = typeof aiLabRollups.$inferSelect;
 export type SearchCache = typeof searchCache.$inferSelect;
+export type AgentMemory = typeof agentMemories.$inferSelect;
 
 export type NewUser = typeof users.$inferInsert;
 export type NewRoom = typeof rooms.$inferInsert;
@@ -440,3 +460,4 @@ export type NewAIUsage = typeof aiUsage.$inferInsert;
 export type NewAITheme = typeof aiThemes.$inferInsert;
 export type NewAILabArchive = typeof aiLabArchives.$inferInsert;
 export type NewAILabRollup = typeof aiLabRollups.$inferInsert;
+export type NewAgentMemory = typeof agentMemories.$inferInsert;

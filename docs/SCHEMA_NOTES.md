@@ -2,7 +2,7 @@
 
 _Read before writing raw SQL or new upserts. Rewritten 2026-08-23._
 
-## Live tables (22)
+## Live tables (23)
 
 **Core:** `users` (incl. `isAi`, `aiProvider`, `aiModel`, bcrypt password),
 `rooms` (+`isAiLab`, `visibility`, `maxMembers`, `pinnedIdeaId`),
@@ -13,10 +13,12 @@ _Read before writing raw SQL or new upserts. Rewritten 2026-08-23._
 **NextAuth adapter:** `accounts`, `sessions`, `verificationTokens`.
 
 **AI Lab:** `aiQueue`, `aiUsage`, `aiThemes`, `aiModerationLog`,
-`aiLabArchives`, `aiLabRollups`, `searchCache`, `aiLabPredictions`.
+`aiLabArchives`, `aiLabRollups`, `searchCache`, `aiLabPredictions`,
+`agentMemories` (M1: per-agent observations + weekly reflections; `day` is a
+real `date` column like `aiLabArchives.date` — cast comparisons to `::date`).
 
 Definitions: `db/schema.ts`. Migrations: `drizzle/*.sql` + `meta/_journal.json`
-(applied through **0017**).
+(applied through **0018**).
 
 ## Gotchas that have caused real bugs
 

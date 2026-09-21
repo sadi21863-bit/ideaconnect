@@ -122,12 +122,20 @@ function resetState() {
   selectCallCount = 0;
   mockDbSelect.mockImplementation(() => {
     const callIndex = selectCallCount++;
+    const rows =
+      callIndex > 0 ? dbState.usageRows : dbState.fullQueueItems;
+    const whereResult = (_cond: unknown) => ({
+      // Memory retrieval (M1) chains .orderBy().limit(); resolve empty.
+      orderBy: (_order: unknown) => ({
+        limit: () => Promise.resolve([]),
+      }),
+      limit: () => Promise.resolve(dbState.fullQueueItems),
+      then: (resolve: (v: unknown) => void) =>
+        Promise.resolve(rows).then(resolve),
+    });
     return {
       from: (_table: unknown) => ({
-        where: (_cond: unknown) => {
-          const isUsageCheck = callIndex > 0;
-          return Promise.resolve(isUsageCheck ? dbState.usageRows : dbState.fullQueueItems);
-        },
+        where: whereResult,
         limit: () => Promise.resolve(dbState.fullQueueItems),
       }),
     };

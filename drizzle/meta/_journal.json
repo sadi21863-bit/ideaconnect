@@ -36,6 +36,13 @@
       "when": 1787000100000,
       "tag": "0017_remove_mentions",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1787000200000,
+      "tag": "0018_agent_memories",
+      "breakpoints": true
     }
   ]
 }

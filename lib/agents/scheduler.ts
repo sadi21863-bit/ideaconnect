@@ -86,6 +86,10 @@ const AILabDebateContext = z.object({
   theme:       z.string(),
 });
 
+const MemoryReflectContext = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date must be YYYY-MM-DD"),
+});
+
 // ── Validation helper ──────────────────────────────────────────────────────
 // Returns true if valid. Logs the error and returns false if invalid.
 // Caller must return/continue early on false so no broken row is written.
@@ -652,6 +656,48 @@ export async function queueDailyArchive(dateStr?: string): Promise<void> {
     promptContext: ctx_archive,
     scheduledFor: new Date(),
     priority:     1,
+    status:       "pending",
+  });
+}
+
+/**
+ * Queues a memory_reflect action for the Archivist (priority 5, background).
+ * The handler writes one observation per active agent for the given day, plus
+ * weekly reflections on Sundays. Pass a date string (YYYY-MM-DD UTC) to
+ * reflect on a specific day; defaults to today.
+ * Idempotent: skips if a memory_reflect row was already queued today
+ * (any status), so a re-run never generates duplicate memories — the handler
+ * additionally skips per agent/day/kind rows that already exist.
+ */
+export async function queueMemoryReflection(dateStr?: string): Promise<void> {
+  const archivist = ALL_AGENTS.find((a) => a.role === "archivist");
+  if (!archivist) throw new Error("Archivist agent not found");
+
+  const date = dateStr ?? new Date().toISOString().slice(0, 10);
+
+  const startOfDay = new Date(new Date().setHours(0, 0, 0, 0));
+  const [existing] = await db
+    .select({ id: aiQueue.id })
+    .from(aiQueue)
+    .where(
+      and(
+        eq(aiQueue.actionType, "memory_reflect"),
+        gte(aiQueue.createdAt, startOfDay)
+      )
+    )
+    .limit(1);
+  if (existing) return;
+
+  const ctx_reflect = { date };
+  if (!validateContext(MemoryReflectContext, ctx_reflect, "memory_reflect")) return;
+
+  await db.insert(aiQueue).values({
+    agentId:      archivist.id,
+    actionType:   "memory_reflect",
+    roomId:       AI_LAB_ROOM_ID,
+    promptContext: ctx_reflect,
+    scheduledFor: new Date(),
+    priority:     5,
     status:       "pending",
   });
 }

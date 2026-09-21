@@ -117,14 +117,23 @@ function resetState() {
   selectCallCount = 0;
   mockDbSelect.mockImplementation(() => {
     const callIndex = selectCallCount++;
+    const rows =
+      callIndex > 0 ? dbState.usageRows : dbState.fullQueueItems;
+    // Thenable chain: awaitable directly AND supports .orderBy().limit()
+    // (memory retrieval, M1) and .limit() endings.
+    const whereResult = (_cond: unknown) => ({
+      orderBy: (_order: unknown) => ({
+        // Memory retrieval resolves empty here so the memory block is
+        // skipped without warnings in executor tests.
+        limit: () => Promise.resolve([]),
+      }),
+      limit: () => Promise.resolve(dbState.fullQueueItems),
+      then: (resolve: (v: unknown) => void) =>
+        Promise.resolve(rows).then(resolve),
+    });
     return {
       from: (_table: unknown) => ({
-        where: (_cond: unknown) => {
-          const isUsageCheck = callIndex > 0;
-          return Promise.resolve(
-            isUsageCheck ? dbState.usageRows : dbState.fullQueueItems
-          );
-        },
+        where: whereResult,
         limit: () => Promise.resolve(dbState.fullQueueItems),
       }),
     };

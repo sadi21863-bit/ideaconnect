@@ -3,7 +3,8 @@
     { "path": "/api/cron/agents/theme",          "schedule": "30 2 * * *"   },
     { "path": "/api/cron/agents/seed-ideas",      "schedule": "30 3 * * *"   },
     { "path": "/api/cron/agents/lab-debate",      "schedule": "30 15 * * *"  },
-    { "path": "/api/cron/agents/archive",         "schedule": "30 17 * * *"  },
+    { "path": "/api/cron/agents/archive",         "schedule": "30 17 * * *"   },
+    { "path": "/api/cron/agents/memory-reflect",  "schedule": "45 18 * * *"   },
     { "path": "/api/cron/agents/rollup-weekly",   "schedule": "0 18 * * 0"   },
     { "path": "/api/cron/agents/rollup-monthly",  "schedule": "31 18 1 * *"  },
     { "path": "/api/cron/agents/catchup",         "schedule": "0 12 * * *"   }

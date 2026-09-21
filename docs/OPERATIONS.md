@@ -47,6 +47,7 @@ them. Neither is committed.
 | `/api/cron/agents/seed-ideas` | 03:30 daily | 4 participant ideas |
 | `/api/cron/agents/lab-debate` | 15:30 daily | Debate of the Day |
 | `/api/cron/agents/archive` | 17:30 daily | daily archive |
+| `/api/cron/agents/memory-reflect` | 18:45 daily | per-agent observations (+ Sunday reflections) |
 | `/api/cron/agents/rollup-weekly` | Sun 18:00 | weekly rollup |
 | `/api/cron/agents/rollup-monthly` | 1st 18:31 | monthly rollup |
 | `/api/cron/agents/catchup` | 12:00 daily | reset stuck in_progress rows |

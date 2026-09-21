@@ -180,3 +180,32 @@ describe("buildPrompt — unknown action type", () => {
     expect(() => buildPrompt(item)).toThrow("No prompt template for action type");
   });
 });
+
+describe("buildPrompt — memory_reflect (self-contained in executor)", () => {
+  it("throws because memory_reflect is self-contained and must not reach buildPrompt", () => {
+    const item = makeItem({ actionType: "memory_reflect" });
+    expect(() => buildPrompt(item)).toThrow("memory_reflect is self-contained");
+  });
+});
+
+describe("buildPrompt — memory block injection (M1)", () => {
+  const memBlock = "THINGS YOU REMEMBER\n- [2026-08-10 observation] I lost to scout";
+
+  it("prepends a non-empty memory block ahead of the task prompt", () => {
+    const item = makeItem({
+      actionType:   "comment",
+      promptContext: { authorHandle: "llama", ideaContent: "content" },
+    });
+    const prompt = buildPrompt(item, "", memBlock);
+    expect(prompt).toContain("THINGS YOU REMEMBER");
+    expect(prompt.indexOf("THINGS YOU REMEMBER")).toBeLessThan(prompt.indexOf("sycophantic"));
+  });
+
+  it("leaves the prompt unchanged when the memory block is empty", () => {
+    const item = makeItem({
+      actionType:   "comment",
+      promptContext: { authorHandle: "llama", ideaContent: "content" },
+    });
+    expect(buildPrompt(item, "", "")).toBe(buildPrompt(item));
+  });
+});

@@ -36,6 +36,7 @@ import { upsertUsage, shouldFetchResearch, writeResearchComment, MIN_CONTENT_LEN
 import { executeArchiveDay, executeQualityReviewArchive } from "./handlers/archive";
 import { executeRollupWeek, executeRollupMonth } from "./handlers/rollup";
 import { executeAILabDebate } from "./handlers/ai-lab-debate";
+import { executeMemoryReflection, getRelevantMemories, formatMemoryBlock } from "./handlers/memory";
 import {
   writeThemeSelect, writePostIdea, writeComment,
   writeQualityReview,
@@ -248,6 +249,11 @@ async function executeItem(item: AIQueue): Promise<void> {
     return;
   }
 
+  if (item.actionType === "memory_reflect") {
+    await executeMemoryReflection(agent, item, today);
+    return;
+  }
+
   // Research pre-call for participant and QC actions.
   // Participants: fetches + posts @research publicly, injects into prompt.
   // QC: fetches silently for fact-checking, does NOT post publicly.
@@ -298,7 +304,30 @@ async function executeItem(item: AIQueue): Promise<void> {
   // jsonMode: true enables response_format: { type: "json_object" } on Groq for
   // models that support it (Llama). Ignored for models that don't (Qwen3, GPT-OSS).
   const JSON_ACTIONS = new Set(["theme_select", "post_idea", "quality_review"]);
-  const prompt      = buildPrompt(item, researchInjection);
+  // Memory injection (M1): fetch this agent's relevant past notes for the
+  // current context. Best-effort — a retrieval failure must never block
+  // the action, and an empty block leaves the prompt unchanged.
+  let memoryBlock = "";
+  {
+    const cMem = (item.promptContext as Record<string, unknown>) ?? {};
+    const memQuery = [
+      cMem.ideaTitle ?? cMem.idea_title ?? "",
+      cMem.theme ?? "",
+      cMem.ideaContent ?? cMem.idea_content ?? "",
+    ]
+      .map(String)
+      .join(" ")
+      .trim();
+    if (memQuery) {
+      try {
+        const mems = await getRelevantMemories(item.agentId, memQuery, 5);
+        memoryBlock = formatMemoryBlock(mems);
+      } catch (e) {
+        console.warn("[executor] Memory retrieval failed:", (e as Error).message);
+      }
+    }
+  }
+  const prompt = buildPrompt(item, researchInjection, memoryBlock);
   const usageOut    = { tokens: 0 };
   const rawResponse = await callAgent(agent, prompt, {
     jsonMode: JSON_ACTIONS.has(item.actionType),

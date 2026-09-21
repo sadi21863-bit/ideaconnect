@@ -44,6 +44,7 @@ import {
   queueDailyArchive,
   queueWeeklyRollup,
   queueMonthlyRollup,
+  queueMemoryReflection,
 } from "@/lib/agents/scheduler";
 
 // ─── Helpers ──────────────────────────────────────────────────────────
@@ -390,5 +391,30 @@ describe("queueMonthlyRollup", () => {
     const expectedStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
     expect(ctx.periodEnd).toBe(expectedEnd.toISOString().slice(0, 10));
     expect(ctx.periodStart).toBe(expectedStart.toISOString().slice(0, 10));
+  });
+});
+
+describe("queueMemoryReflection", () => {
+  beforeEach(() => {
+    resetCaptures();
+    mockInsertValues.mockImplementation((data) => {
+      capturedInserts.push(data);
+      return Promise.resolve(undefined);
+    });
+  });
+
+  it("queues one row with actionType=memory_reflect for the archivist", async () => {
+    mockDbSelect.mockReturnValue(makeSelectChain([])); // no existing row today
+    await queueMemoryReflection("2026-08-12");
+    expect(capturedInserts).toHaveLength(1);
+    expect(lastInsert().actionType).toBe("memory_reflect");
+    expect(lastInsert().agentId).toBe("ai_archivist");
+    expect((lastInsert().promptContext as Record<string, string>).date).toBe("2026-08-12");
+  });
+
+  it("is idempotent � skips when a memory_reflect row was already queued today", async () => {
+    mockDbSelect.mockReturnValue(makeSelectChain([{ id: "existing" }]));
+    await queueMemoryReflection("2026-08-12");
+    expect(capturedInserts).toHaveLength(0);
   });
 });

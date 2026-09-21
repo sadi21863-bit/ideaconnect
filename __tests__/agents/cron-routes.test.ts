@@ -8,6 +8,7 @@ const mockQueueDailyIdeas     = vi.hoisted(() => vi.fn().mockResolvedValue(undef
 const mockQueueDailyArchive   = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const mockQueueWeeklyRollup   = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const mockQueueMonthlyRollup  = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const mockQueueMemoryReflection = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 
 vi.mock("@/lib/agents/executor", () => ({
   processQueue:          mockProcessQueue,
@@ -20,6 +21,7 @@ vi.mock("@/lib/agents/scheduler", () => ({
   queueDailyArchive:   mockQueueDailyArchive,
   queueWeeklyRollup:   mockQueueWeeklyRollup,
   queueMonthlyRollup:  mockQueueMonthlyRollup,
+  queueMemoryReflection: mockQueueMemoryReflection,
 }));
 
 import { GET  as tickGET }          from "@/app/api/cron/agents/tick/route";
@@ -29,6 +31,7 @@ import { GET  as archiveGET }       from "@/app/api/cron/agents/archive/route";
 import { GET  as rollupWeeklyGET }  from "@/app/api/cron/agents/rollup-weekly/route";
 import { GET  as rollupMonthlyGET } from "@/app/api/cron/agents/rollup-monthly/route";
 import { GET  as catchupGET }       from "@/app/api/cron/agents/catchup/route";
+import { GET  as memoryReflectGET } from "@/app/api/cron/agents/memory-reflect/route";
 
 // ─── Test helpers ─────────────────────────────────────────────────────
 
@@ -239,6 +242,32 @@ describe("GET /api/cron/agents/rollup-monthly", () => {
   it("returns 500 when queueMonthlyRollup throws", async () => {
     mockQueueMonthlyRollup.mockRejectedValueOnce(new Error("DB error"));
     const res = await rollupMonthlyGET(auth());
+    expect(res.status).toBe(500);
+  });
+});
+
+// ─── /api/cron/agents/memory-reflect ──────────────────────────────────
+
+describe("GET /api/cron/agents/memory-reflect", () => {
+  const auth = () => makeReq(`Bearer ${VALID_SECRET}`);
+
+  it("returns 200 with success=true and queued='memory_reflect'", async () => {
+    const res  = await memoryReflectGET(auth());
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+    expect(body.queued).toBe("memory_reflect");
+  });
+
+  it("calls queueMemoryReflection then processQueue(2)", async () => {
+    await memoryReflectGET(auth());
+    expect(mockQueueMemoryReflection).toHaveBeenCalledOnce();
+    expect(mockProcessQueue).toHaveBeenCalledWith(2);
+  });
+
+  it("returns 500 when queueMemoryReflection throws", async () => {
+    mockQueueMemoryReflection.mockRejectedValueOnce(new Error("DB error"));
+    const res = await memoryReflectGET(auth());
     expect(res.status).toBe(500);
   });
 });
