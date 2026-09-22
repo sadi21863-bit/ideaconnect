@@ -7,6 +7,9 @@ import { getAgent } from "../personas";
 import { callAgent } from "../providers/index";
 import { queueCommentsOnIdea, queueConductorIntervention, queueQualityReview, queueDebateReply } from "../scheduler";
 import { parseJsonResponse } from "../json-helpers";
+import { stripThinkingTags } from "../response-cleaner";
+import { buildPrompt } from "../prompts";
+import { checkIdeaNovelty, LEXICAL_TRIGGER } from "../novelty";
 import type { AIQueue } from "@/db/schema";
 import { AI_LAB_ROOM_ID, MIN_CONTENT_LENGTH } from "./shared";
 
@@ -52,8 +55,9 @@ export async function writeThemeSelect(
 export async function writePostIdea(
   agentId: string,
   item:    AIQueue,
-  response: string
-): Promise<void> {
+  response: string,
+  basePrompt?: string
+): Promise<boolean> {
   let parsed: { title?: string; pitch?: string; content?: string };
   try {
     parsed = parseJsonResponse(response) as typeof parsed;
@@ -61,9 +65,60 @@ export async function writePostIdea(
     throw new Error(`Invalid JSON from idea post: ${(e as Error).message}`);
   }
 
-  const content = (parsed.content ?? "").trim();
+  let title   = (parsed.title ?? "Untitled").slice(0, 200);
+  let pitch   = parsed.pitch ?? "";
+  let content = (parsed.content ?? "").trim();
   if (content.length < MIN_CONTENT_LENGTH) {
     throw new Error("Empty response after cleanup");
+  }
+
+  // M2 novelty gate: check against the last 14 days of Lab ideas.
+  // Duplicate → one resample with a novelty nudge → lexical recheck.
+  // Still duplicate → skip the insert (day runs with fewer ideas rather
+  // than a repeat) and leave an audit trail. Returns false when skipped.
+  const firstCheck = await checkIdeaNovelty(title, pitch);
+  if (!firstCheck.novel && firstCheck.closestId) {
+    console.log(
+      `[executor] idea overlaps "${firstCheck.closestTitle}" ` +
+      `(sim=${firstCheck.maxSimilarity.toFixed(2)}${firstCheck.reason ? `, ${firstCheck.reason}` : ""}) — resampling once`
+    );
+    const agent = getAgent(agentId);
+    if (agent) {
+      const nudge =
+        `\n\nIMPORTANT: Your angle overlaps a recent Lab idea ("${firstCheck.closestTitle}"). ` +
+        `Pick a clearly DIFFERENT angle — new proposal, new claim, new domain. ` +
+        `Do not restate the overlapping idea.`;
+      const retryRaw = stripThinkingTags(
+        await callAgent(agent, (basePrompt ?? buildPrompt(item)) + nudge, { jsonMode: true })
+      );
+      try {
+        parsed = parseJsonResponse(retryRaw) as typeof parsed;
+      } catch (e) {
+        throw new Error(`Invalid JSON from idea resample: ${(e as Error).message}`);
+      }
+      title   = (parsed.title ?? "Untitled").slice(0, 200);
+      pitch   = parsed.pitch ?? "";
+      content = (parsed.content ?? "").trim();
+      if (content.length < MIN_CONTENT_LENGTH) {
+        throw new Error("Empty response after cleanup");
+      }
+      const recheck = await checkIdeaNovelty(title, pitch, { llmVerdict: false });
+      if (recheck.maxSimilarity >= LEXICAL_TRIGGER) {
+        console.log(
+          `[executor] resample still overlaps "${recheck.closestTitle}" ` +
+          `(sim=${recheck.maxSimilarity.toFixed(2)}) — skipping idea post`
+        );
+        await db.insert(aiModerationLog).values({
+          moderatorAgentId: "system",
+          targetType:       "novelty_skip",
+          targetId:         item.id,
+          verdict:          "skipped",
+          reason:           `Idea "${title}" overlapped "${recheck.closestTitle}" (sim=${recheck.maxSimilarity.toFixed(2)}) after one resample.`,
+          reviewedAt:       new Date(),
+        }).catch(() => null);
+        return false;
+      }
+    }
   }
 
   const [newIdea] = await db
@@ -71,8 +126,8 @@ export async function writePostIdea(
     .values({
       userId:      agentId,
       roomId:      item.roomId ?? AI_LAB_ROOM_ID,
-      title:       (parsed.title ?? "Untitled").slice(0, 200),
-      context:     parsed.pitch ?? null,
+      title,
+      context:     pitch || null,
       content,
       status:      "published",
       feedVisible: true,
@@ -98,6 +153,7 @@ export async function writePostIdea(
       console.error(`[executor] queueQualityReview failed for idea ${newIdea.id}:`, (err as Error).message);
     }
   }
+  return true;
 }
 
 export async function writeComment(

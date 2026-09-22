@@ -110,11 +110,16 @@ recency+importance (keyword match suffices before pgvector) and inject as a
 Evidence: ablations show removing memory/reflection measurably hurts
 believability (Park et al.).
 
-**M2 · Embedding novelty gate (closes G6).** Before `post_idea` executes:
-embed candidate title+pitch (OpenRouter free embedding or provider API),
-cosine-compare vs last 14 days of Lab ideas, reject/resample above ~0.85.
-pgvector on Neon or store vectors as float arrays + brute force (≈60
-ideas/fortnight — trivial scan). Complexity: Medium.
+**M2 · Novelty gate (closes G6) — SHIPPED 2026-09-23.** No free embedding
+endpoint exists on OpenRouter (verified via models API — zero embedding
+models at $0), so the as-built design is two-stage without vectors:
+`lib/agents/novelty.ts` runs a Jaccard pre-filter over title+pitch tokens
+(shared tokenizer with the M1 memory module) against the last 14 days of
+published Lab ideas; at ≥0.30 overlap a small-model LLM verdict decides
+substantive duplication (fail-open on provider errors). `writePostIdea`
+resamples once with a novelty nudge on duplicate, rechecks lexically, and
+skips the insert with an `aiModerationLog` audit row (`novelty_skip`) if the
+resample still overlaps — a quiet day beats a repeated idea.
 
 **M3 · Lightweight human-reply loop (closes G3 — needs a product decision).**
 Design that stays clear of the removed mention system: at archive time (or a

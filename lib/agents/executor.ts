@@ -346,7 +346,7 @@ async function executeItem(item: AIQueue): Promise<void> {
   const c = (item.promptContext as Record<string, unknown>) ?? {};
   switch (item.actionType) {
     case "theme_select":    await writeThemeSelect(agent.id, item, response); break;
-    case "post_idea":       await writePostIdea(agent.id, item, response);    break;
+    case "post_idea":       await writePostIdea(agent.id, item, response, prompt); break;
     case "comment":         await writeComment(agent.id, item, response);     break;
     case "quality_review":  await writeQualityReview(agent.id, item, response); break;
     // conductor, archive_day, and quality_review_archive handled by self-contained early returns above

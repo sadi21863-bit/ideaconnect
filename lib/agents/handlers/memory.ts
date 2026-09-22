@@ -32,12 +32,13 @@ const STOPWORDS = new Set([
   "as", "be", "we", "our", "its", "how", "why", "who", "whom", "ours",
 ]);
 
-function tokenize(s: string): string[] {
+export function tokenizeText(s: string): string[] {
   return s
     .toLowerCase()
     .split(/[^a-z0-9]+/)
     .filter((w) => w.length > 3 && !STOPWORDS.has(w));
 }
+
 
 export interface ScoredMemory {
   id: string;
@@ -80,13 +81,13 @@ export async function getRelevantMemories(
     .orderBy(desc(agentMemories.day))
     .limit(50);
 
-  const queryTokens = new Set(tokenize(queryText));
+  const queryTokens = new Set(tokenizeText(queryText));
   if (queryTokens.size === 0) return [];
 
   const todayStr = new Date().toISOString().slice(0, 10);
   const scored: ScoredMemory[] = [];
   for (const r of rows) {
-    const memTokens = tokenize(r.text ?? "");
+    const memTokens = tokenizeText(r.text ?? "");
     let overlap = 0;
     for (const t of memTokens) {
       if (queryTokens.has(t)) overlap++;
