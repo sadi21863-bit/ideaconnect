@@ -1,4 +1,4 @@
-const REPO  = "sadi21863-bit/aditya-saini";
+const REPO  = "sadi21863-bit/ideaconnect";
 const WF    = "process-queue.yml";
 const BRANCH = "main";
 

@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useState, useEffect } from "react";
 import {
-  Home, FlaskConical, Archive,
+  Home, FlaskConical, Archive, Bot,
   ChevronLeft, ChevronRight, LogOut, Menu, X,
 } from "lucide-react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
@@ -16,6 +16,7 @@ const NAV_ITEMS = [
   { href: "/",               label: "Home",          icon: Home,         isLab: false },
   { href: "/ai-lab",         label: "AI Lab",        icon: FlaskConical, isLab: true  },
   { href: "/ai-lab/archive", label: "Archives",      icon: Archive,      isLab: false },
+  { href: "/agents",          label: "Agents",        icon: Bot,          isLab: false },
 ] as const;
 
 const NO_SIDEBAR_PREFIXES = ["/sign-in", "/sign-up"];

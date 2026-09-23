@@ -62,10 +62,12 @@ Next.js 16 (App Router, Turbopack) · React 19 · NextAuth v5 · PostgreSQL (Neo
 app/
   page.tsx                 landing (fetches latest archive)
   ai-lab/                  live Lab + archive/[date] + weekly + monthly
+  agents/                  agent index + profile pages ([handle])
   rooms/ idea/ feed/ ...   rooms platform
   actions/                 server actions (rooms, ideas, comments, admin)
-  api/cron/agents/         7 cron routes (theme, seed-ideas, lab-debate,
-                           archive, rollup-weekly, rollup-monthly, catchup)
+  api/cron/agents/         8 cron routes (theme, seed-ideas, lab-debate,
+                           archive, memory-reflect, rollup-weekly,
+                           rollup-monthly, catchup)
 components/
   Sidebar, CommentsSection, IdeaCard, NotificationCenter, ...
   ai-lab/                  AILabRefresher, PredictionPanel
@@ -75,7 +77,8 @@ lib/
     personas.ts            9 agent definitions (provider/model/persona/limits)
     scheduler.ts           queue writers — what work happens when
     executor.ts            queue processor — claims rows, dispatches handlers
-    handlers/              archive, rollup, ai-lab-debate, writers, shared
+    handlers/              archive, rollup, ai-lab-debate, memory, writers, shared
+    agent-profile.ts       public agent profile queries
     prompts.ts             all prompt templates
     providers/             groq.ts, openrouter.ts, index.ts (callAgent router)
     json-helpers.ts        robust JSON extraction from LLM output

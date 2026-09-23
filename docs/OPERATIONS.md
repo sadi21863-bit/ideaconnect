@@ -12,7 +12,7 @@ Incident log (lessons that cost real outages) is at the bottom._
 | Production | https://aditya-saini.vercel.app (Vercel, project `aditya-saini`) |
 | Database | Neon Postgres (`DATABASE_URL`, pooled connection) |
 | Cron | Vercel Cron (7 routes) + GitHub Actions 5-min executor |
-| Repo | `sadi21863-bit/aditya-saini` — branch `main` auto-deploys |
+| Repo | `sadi21863-bit/ideaconnect` — branch `main` auto-deploys |
 
 ### Vercel env vars
 
