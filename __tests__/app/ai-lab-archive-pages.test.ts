@@ -8,16 +8,22 @@
  */
 
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 // ─── DB mock ─────────────────────────────────────────────────────────
 // Supports the full Drizzle chain: .select().from().where().orderBy().limit().offset()
 // All chain methods return a thenable so any combination terminates correctly.
 
 let mockDbReturn: unknown[] = [];
+const mockWhereConditions: SQL[] = [];
 
 function makeChain(data: unknown[]) {
   const p = Object.assign(Promise.resolve(data), {
-    where:   (_c: unknown) => makeChain(data),
+    where:   (condition: unknown) => {
+      if (condition) mockWhereConditions.push(condition as SQL);
+      return makeChain(data);
+    },
     orderBy: (_o: unknown) => makeChain(data),
     limit:   (_l: unknown) => makeChain(data),
     offset:  (_off: unknown) => Promise.resolve(data),
@@ -46,6 +52,10 @@ import {
   getWeeklyRollup,
   getMonthlyRollup,
   getArchiveIndex,
+  getArchiveIndexCount,
+  getRollupIndex,
+  getRollupIndexCount,
+  normalizeArchiveSearch,
   ARCHIVE_PAGE_SIZE,
 } from "@/lib/archive-queries";
 
@@ -76,6 +86,7 @@ function makeArchive(status: string) {
 
 function resetDb(rows: unknown[] = []) {
   mockDbReturn = rows;
+  mockWhereConditions.length = 0;
   mockDbSelect.mockImplementation(() => ({
     from: (_t: unknown) => makeChain(mockDbReturn),
   }));
@@ -228,5 +239,47 @@ describe("getArchiveIndex — pagination", () => {
     resetDb([]);
     const result = await getArchiveIndex(1);
     expect(result).toEqual([]);
+  });
+});
+
+describe("archive search", () => {
+  it("trims, collapses whitespace, and caps the query length", () => {
+    expect(normalizeArchiveSearch(`  private   computation\n `)).toBe("private computation");
+    expect(normalizeArchiveSearch("x".repeat(101))).toHaveLength(100);
+    expect(normalizeArchiveSearch("   ")).toBe("");
+  });
+
+  it("accepts a search term for daily rows and counts", async () => {
+    resetDb([makeArchive("published")]);
+    expect(await getArchiveIndex(1, "50%_off")).toHaveLength(1);
+    const dailyQuery = new PgDialect().sqlToQuery(mockWhereConditions[0]);
+    expect(dailyQuery.sql).toContain('"ai_lab_archives"."theme" ilike');
+    expect(dailyQuery.sql).toContain('"ai_lab_archives"."narrative_arc" ilike');
+    expect(dailyQuery.sql).toContain('"ai_lab_archives"."summary_markdown" ilike');
+    expect(dailyQuery.params).toContain("%50\\%\\_off%");
+
+    resetDb([{ count: 3 }]);
+    expect(await getArchiveIndexCount("privacy")).toBe(3);
+  });
+
+  it("accepts a search term for weekly and monthly rollups", async () => {
+    const rollup = {
+      id: "r-search",
+      periodType: "weekly",
+      periodStart: "2026-04-20",
+      periodEnd: "2026-04-26",
+      title: "Privacy systems",
+      status: "published",
+    };
+    resetDb([rollup]);
+    expect(await getRollupIndex("weekly", 1, "privacy")).toHaveLength(1);
+    const rollupQuery = new PgDialect().sqlToQuery(mockWhereConditions[0]);
+    expect(rollupQuery.sql).toContain('"ai_lab_rollups"."title" ilike');
+    expect(rollupQuery.sql).toContain('"ai_lab_rollups"."narrative_arc" ilike');
+    expect(rollupQuery.sql).toContain('"ai_lab_rollups"."summary_markdown" ilike');
+    expect(rollupQuery.params).toContain("%privacy%");
+
+    resetDb([{ count: 1 }]);
+    expect(await getRollupIndexCount("weekly", "privacy")).toBe(1);
   });
 });

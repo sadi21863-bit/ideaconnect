@@ -1,24 +1,42 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Lightbulb, MessageSquare, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, Lightbulb, MessageSquare, Search, Users } from "lucide-react";
 import {
   getArchiveIndex,
   getArchiveIndexCount,
   getRollupIndex,
   getRollupIndexCount,
+  normalizeArchiveSearch,
   stripMarkdown,
   ARCHIVE_PAGE_SIZE,
 } from "@/lib/archive-queries";
 
-export const metadata: Metadata = {
-  title: "AI Lab Archive — IdeaConnect",
-  description: "Every day's AI Lab discussion, permanently recorded.",
-  robots: process.env.AI_LAB_ARCHIVE_INDEXABLE === "true" ? undefined : { index: false, follow: false },
+type ArchiveSearchParams = {
+  tab?: string | string[];
+  page?: string | string[];
+  q?: string | string[];
 };
 
 type Props = {
-  searchParams: Promise<{ tab?: string; page?: string }>;
+  searchParams: Promise<ArchiveSearchParams>;
 };
+
+function firstParam(value: string | string[] | undefined): string {
+  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
+}
+
+export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
+  const params = await searchParams;
+  const q = normalizeArchiveSearch(firstParam(params.q));
+  const title = q ? `Search archives: ${q} — IdeaConnect` : "AI Lab Archive — IdeaConnect";
+  const hasArchiveParams = params.tab !== undefined || params.page !== undefined || params.q !== undefined;
+  const noindex = hasArchiveParams || process.env.AI_LAB_ARCHIVE_INDEXABLE !== "true";
+  return {
+    title,
+    description: "Every day's AI Lab discussion, permanently recorded.",
+    robots: noindex ? { index: false, follow: false } : undefined,
+  };
+}
 
 const TABS = ["daily", "weekly", "monthly"] as const;
 type Tab = typeof TABS[number];
@@ -40,32 +58,36 @@ function formatDateRange(start: string, end: string): string {
 const EMPTY_MSG = "No published archives yet. Archives generate nightly — check back tomorrow.";
 
 export default async function ArchiveIndexPage({ searchParams }: Props) {
-  const { tab: tabParam, page: pageParam } = await searchParams;
-  const tab  = (TABS.includes(tabParam as Tab) ? tabParam : "daily") as Tab;
-  const page = Math.max(1, Number(pageParam ?? 1));
+  const params = await searchParams;
+  const tabParam = firstParam(params.tab);
+  const pageParam = firstParam(params.page);
+  const tab = (TABS.includes(tabParam as Tab) ? tabParam : "daily") as Tab;
+  const parsedPage = Number(pageParam || "1");
+  const page = Number.isSafeInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const q = normalizeArchiveSearch(firstParam(params.q));
 
   function buildUrl(p: number, t: Tab = tab) {
-    const params = new URLSearchParams();
-    if (t !== "daily") params.set("tab", t);
-    if (p > 1) params.set("page", String(p));
-    const qs = params.toString();
+    const nextParams = new URLSearchParams();
+    if (t !== "daily") nextParams.set("tab", t);
+    if (q) nextParams.set("q", q);
+    if (p > 1) nextParams.set("page", String(p));
+    const qs = nextParams.toString();
     return `/ai-lab/archive${qs ? `?${qs}` : ""}`;
   }
 
-  // Fetch data for the active tab
   let items: unknown[] = [];
   let totalCount = 0;
 
   if (tab === "daily") {
     [items, totalCount] = await Promise.all([
-      getArchiveIndex(page),
-      getArchiveIndexCount(),
+      getArchiveIndex(page, q),
+      getArchiveIndexCount(q),
     ]);
   } else {
     const pType = tab === "weekly" ? "weekly" : "monthly";
     [items, totalCount] = await Promise.all([
-      getRollupIndex(pType, page),
-      getRollupIndexCount(pType),
+      getRollupIndex(pType, page, q),
+      getRollupIndexCount(pType, q),
     ]);
   }
 
@@ -81,6 +103,35 @@ export default async function ArchiveIndexPage({ searchParams }: Props) {
         </p>
         <h1 className="font-display text-[clamp(36px,5vw,56px)] font-normal tracking-tight text-ic-ink">Archive</h1>
       </div>
+
+      <form method="get" action="/ai-lab/archive" className="mb-8" role="search">
+        {tab !== "daily" && <input type="hidden" name="tab" value={tab} />}
+        <div className="flex items-center gap-2 max-w-xl">
+          <div className="relative flex-1">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ic-muted pointer-events-none" />
+            <input
+              type="search"
+              name="q"
+              defaultValue={q}
+              maxLength={100}
+              placeholder={`Search ${tab} archives…`}
+              aria-label={`Search ${tab} archives`}
+              className="w-full bg-ic-card/50 border border-ic-rule/30 rounded-xl pl-9 pr-3 py-2.5 text-sm text-ic-ink placeholder:text-ic-muted focus:outline-none focus:border-ic-accent"
+            />
+          </div>
+          <button
+            type="submit"
+            className="px-4 py-2.5 rounded-xl border border-ic-accent/40 text-ic-accent hover:bg-ic-accent/10 font-mono text-xs transition-colors"
+          >
+            Search
+          </button>
+        </div>
+        {q && (
+          <p className="font-mono text-[11px] text-ic-muted mt-3">
+            Showing results for “{q}”
+          </p>
+        )}
+      </form>
 
       {/* Tabs */}
       <div className="flex gap-2 border-b border-ic-rule/30 mb-10">
@@ -101,13 +152,15 @@ export default async function ArchiveIndexPage({ searchParams }: Props) {
 
       {/* Archive list */}
       {items.length === 0 ? (
-        <p className="font-mono text-sm text-ic-muted text-center py-20">{EMPTY_MSG}</p>
+        <p className="font-mono text-sm text-ic-muted text-center py-20">
+          {q ? `No published ${tab} archives match “${q}”.` : EMPTY_MSG}
+        </p>
       ) : (
         <div className="flex flex-col gap-3">
           {tab === "daily" && (items as Array<Record<string, unknown>>).map((archive) => {
             const date        = String(archive.date ?? "");
             const theme       = String(archive.theme ?? "");
-            const excerpt     = stripMarkdown(String(archive.narrativeArc ?? "")).slice(0, 120);
+            const excerpt     = stripMarkdown(String(archive.narrativeArc ?? archive.summaryMarkdown ?? "")).slice(0, 120);
             const stats       = (archive.stats ?? {}) as Record<string, number>;
 
             return (
@@ -140,7 +193,7 @@ export default async function ArchiveIndexPage({ searchParams }: Props) {
             const start   = String(rollup.periodStart ?? "");
             const end     = String(rollup.periodEnd   ?? "");
             const title   = String(rollup.title ?? "");
-            const excerpt = stripMarkdown(String(rollup.narrativeArc ?? "")).slice(0, 120);
+            const excerpt = stripMarkdown(String(rollup.narrativeArc ?? rollup.summaryMarkdown ?? "")).slice(0, 120);
             const href    = tab === "weekly"
               ? `/ai-lab/archive/weekly/${end}`
               : `/ai-lab/archive/monthly/${start.slice(0, 7)}`;

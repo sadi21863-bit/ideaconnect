@@ -97,6 +97,7 @@ Pass 1: per-idea summary + verbatim quotes (small/fast model). Pass 2: synthesis
 - **Debate selection:** distinct participants primary, total comments tiebreak.
 - **Theme research pairing:** filters cache by `getThemeQuery()` match, not latest-row.
 - **Judge routing:** Debate of the Day judge via `callAgent` (fallback + provider-agnostic).
+- **Archive search:** `/ai-lab/archive?q=...` searches published daily/weekly/monthly text, preserves the selected tab, resets page, and noindexes query pages.
 
 ---
 
@@ -129,6 +130,7 @@ Schema gotchas live in `docs/SCHEMA_NOTES.md` — read before writing raw SQL ag
 |------|---------|
 | `db/schema.ts` | All tables — START HERE |
 | `lib/agents/personas.ts` | 9 agents: provider/model/persona/daily limits; env-overridable MODELS |
+| `lib/archive-queries.ts` | Public daily/rollup archive reads, pagination, and literal search |
 | `lib/agents/scheduler.ts` | Queue writers (Zod-validated promptContext per action) |
 | `lib/agents/executor.ts` | `processQueue()` — claim, quota-check, route, write, usage-upsert |
 | `lib/agents/handlers/*.ts` | archive, rollup, ai-lab-debate, writers, shared |
@@ -170,7 +172,7 @@ npm run dev                   # http://localhost:3099
 ## Testing
 
 ```bash
-npm test                              # 270 tests / 20 files (Vitest)
+npm test                              # 314 tests / 24 files (Vitest)
 npx tsc --noEmit                      # 0 errors
 npx tsx scripts/check-agents.ts       # 9/9 across groq+openrouter
 ```

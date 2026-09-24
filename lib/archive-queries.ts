@@ -8,9 +8,50 @@
 
 import { db } from "@/db";
 import { aiLabArchives, aiLabRollups, ideas } from "@/db/schema";
-import { and, asc, desc, eq, gt, gte, lt, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, ilike, lt, lte, or, sql } from "drizzle-orm";
 
 export const ARCHIVE_PAGE_SIZE = 20;
+
+export function normalizeArchiveSearch(search?: string): string {
+  return (search ?? "").trim().replace(/\s+/g, " ").slice(0, 100);
+}
+
+function archiveSearchPattern(search?: string): string | null {
+  const normalized = normalizeArchiveSearch(search);
+  if (!normalized) return null;
+  return `%${normalized.replace(/[\\%_]/g, "\\$&")}%`;
+}
+
+function dailyArchiveIndexCondition(search?: string) {
+  const published = eq(aiLabArchives.status, "published");
+  const pattern = archiveSearchPattern(search);
+  if (!pattern) return published;
+  return and(
+    published,
+    or(
+      ilike(aiLabArchives.theme, pattern),
+      ilike(aiLabArchives.narrativeArc, pattern),
+      ilike(aiLabArchives.summaryMarkdown, pattern),
+    ),
+  );
+}
+
+function rollupIndexCondition(periodType: "weekly" | "monthly", search?: string) {
+  const publishedAndType = and(
+    eq(aiLabRollups.periodType, periodType),
+    eq(aiLabRollups.status, "published"),
+  );
+  const pattern = archiveSearchPattern(search);
+  if (!pattern) return publishedAndType;
+  return and(
+    publishedAndType,
+    or(
+      ilike(aiLabRollups.title, pattern),
+      ilike(aiLabRollups.narrativeArc, pattern),
+      ilike(aiLabRollups.summaryMarkdown, pattern),
+    ),
+  );
+}
 
 // ─── Plain-text excerpt utility ───────────────────────────────────────
 
@@ -66,22 +107,22 @@ export async function getAdjacentDailyArchives(date: string) {
   };
 }
 
-export async function getArchiveIndex(page: number) {
+export async function getArchiveIndex(page: number, search?: string) {
   const offset = (page - 1) * ARCHIVE_PAGE_SIZE;
   return db
     .select()
     .from(aiLabArchives)
-    .where(eq(aiLabArchives.status, "published"))
+    .where(dailyArchiveIndexCondition(search))
     .orderBy(desc(aiLabArchives.date))
     .limit(ARCHIVE_PAGE_SIZE)
     .offset(offset);
 }
 
-export async function getArchiveIndexCount(): Promise<number> {
+export async function getArchiveIndexCount(search?: string): Promise<number> {
   const rows = await db
     .select({ count: sql<number>`count(*)` })
     .from(aiLabArchives)
-    .where(eq(aiLabArchives.status, "published"));
+    .where(dailyArchiveIndexCondition(search));
   return Number(rows[0]?.count ?? 0);
 }
 
@@ -214,28 +255,22 @@ export async function getWeeklyRollupsInRange(startDate: string, endDate: string
     .orderBy(asc(aiLabRollups.periodStart));
 }
 
-export async function getRollupIndex(periodType: "weekly" | "monthly", page: number) {
+export async function getRollupIndex(periodType: "weekly" | "monthly", page: number, search?: string) {
   const offset = (page - 1) * ARCHIVE_PAGE_SIZE;
   return db
     .select()
     .from(aiLabRollups)
-    .where(and(
-      eq(aiLabRollups.periodType, periodType),
-      eq(aiLabRollups.status, "published"),
-    ))
+    .where(rollupIndexCondition(periodType, search))
     .orderBy(desc(aiLabRollups.periodStart))
     .limit(ARCHIVE_PAGE_SIZE)
     .offset(offset);
 }
 
-export async function getRollupIndexCount(periodType: "weekly" | "monthly"): Promise<number> {
+export async function getRollupIndexCount(periodType: "weekly" | "monthly", search?: string): Promise<number> {
   const rows = await db
     .select({ count: sql<number>`count(*)` })
     .from(aiLabRollups)
-    .where(and(
-      eq(aiLabRollups.periodType, periodType),
-      eq(aiLabRollups.status, "published"),
-    ));
+    .where(rollupIndexCondition(periodType, search));
   return Number(rows[0]?.count ?? 0);
 }
 
