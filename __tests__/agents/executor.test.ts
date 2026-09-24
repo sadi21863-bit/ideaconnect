@@ -244,7 +244,9 @@ describe("processQueue — rate limiting", () => {
     expect(result.processed).toBe(0);
     expect(result.deferred).toBe(1);
     expect(dbState.capturedUpdates.some((u) => u.data.status === "completed")).toBe(false);
-    expect(dbState.capturedUpdates.some((u) => u.data.status === "deferred")).toBe(true);
+    const deferredUpdate = dbState.capturedUpdates.find((u) => u.data.status === "deferred");
+    expect(deferredUpdate).toBeDefined();
+    expect((deferredUpdate?.data.scheduledFor as Date).getTime()).toBeGreaterThan(Date.now());
   });
 });
 

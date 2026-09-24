@@ -73,8 +73,9 @@ Sun 18:00    rollup-weekly   ·  1st 18:31 rollup-monthly
 ```
 
 Vercel Cron runs these (see `vercel.json`). GitHub Actions additionally ticks
-the executor every 5 minutes (`process-queue.ts`) and fails loudly if any
-agent probe fails.
+the executor, requeues missing participant ideas, and after their UTC windows
+ensures Debate of the Day and memory reflection exist. Provider probe failures
+finish the run red after the queue drain.
 
 ### Executor mechanics
 - Claims pending rows with `FOR UPDATE SKIP LOCKED`; ordinary failures retry up to 3 attempts with bounded backoff; rate-limited items wait until the next UTC day; feature-budget items defer for 15 minutes and are requeued by catchup.
@@ -173,7 +174,7 @@ npm run dev                   # http://localhost:3099
 ## Testing
 
 ```bash
-npm test                              # 320 tests / 25 files (Vitest)
+npm test                              # 322 tests / 25 files (Vitest)
 npx tsc --noEmit                      # 0 errors
 npx tsx scripts/check-agents.ts       # 9/9 across groq+openrouter
 ```

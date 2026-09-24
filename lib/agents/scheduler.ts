@@ -200,8 +200,11 @@ export async function queueThemeSelection(): Promise<void> {
  * Queues 4 post_idea actions — one per participant — spread over 0–9 min.
  * Reads today's theme from ai_themes; falls back to "Open exploration".
  */
-export async function queueDailyIdeas(): Promise<void> {
-  const participants = getParticipants();
+export async function queueDailyIdeas(participantIds?: string[]): Promise<void> {
+  const allParticipants = getParticipants();
+  const participants = participantIds
+    ? allParticipants.filter((agent) => participantIds.includes(agent.id))
+    : allParticipants;
   const today = new Date().toISOString().slice(0, 10);
 
   const [todayTheme] = await db

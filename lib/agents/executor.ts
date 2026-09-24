@@ -241,8 +241,9 @@ async function executeItem(item: AIQueue): Promise<"completed" | "deferred"> {
     .where(and(eq(aiUsage.feature, featureLabel), gte(aiUsage.createdAt, startOfDayUTC)));
 
   if (Number(usageRow?.total ?? 0) >= dailyCeiling) {
+    const retryAt = new Date(Date.now() + 15 * 60 * 1000);
     await db.update(aiQueue)
-      .set({ status: "deferred", errorMessage: `quota_exceeded: ${featureLabel} daily budget` })
+      .set({ status: "deferred", scheduledFor: retryAt, errorMessage: `quota_exceeded: ${featureLabel} daily budget` })
       .where(eq(aiQueue.id, item.id));
     await db.insert(aiModerationLog).values({
       moderatorAgentId: "system",

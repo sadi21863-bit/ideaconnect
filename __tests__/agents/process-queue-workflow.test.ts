@@ -10,6 +10,12 @@ describe("process-queue workflow", () => {
     expect(references).toHaveLength(2);
   });
 
+  it("self-heals partial participant days and late Lab stages", () => {
+    expect(processScript).toContain("queueDailyIdeas(stillMissing)");
+    expect(processScript).toContain("queueAILabDebateOfDay(today)");
+    expect(processScript).toContain("queueMemoryReflection(today)");
+  });
+
   it("does not advance Conductor's future stall intervention", () => {
     expect(processScript).toContain("action_type <> 'conductor'");
   });

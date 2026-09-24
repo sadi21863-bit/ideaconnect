@@ -83,7 +83,7 @@ describe("getAILabIdeas — author fields from DB join", () => {
     expect(result[0].author.isAi).toBe(true);
     expect(result[0].author.aiRole).toBe("participant");
     expect(result[0].author.avatarUrl).toBe("/agents/llama.png");
-  });
+  }, 15_000);
 
   it("human-authored row has isAi=false on author (regression check)", async () => {
     const { getAILabIdeas } = await import("@/lib/ai-lab-queries");

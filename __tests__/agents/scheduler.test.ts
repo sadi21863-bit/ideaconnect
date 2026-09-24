@@ -134,6 +134,13 @@ describe("queueDailyIdeas", () => {
     });
   });
 
+  it("queues only the requested participants when recovering a partial day", async () => {
+    await queueDailyIdeas(["ai_scout", "ai_maverick"]);
+
+    expect(capturedInserts).toHaveLength(2);
+    expect(capturedInserts.map((r) => r.agentId)).toEqual(["ai_scout", "ai_maverick"]);
+  });
+
   it("queues exactly 4 rows (one per participant)", async () => {
     await queueDailyIdeas();
     expect(capturedInserts).toHaveLength(4);
@@ -412,7 +419,7 @@ describe("queueMemoryReflection", () => {
     expect((lastInsert().promptContext as Record<string, string>).date).toBe("2026-08-12");
   });
 
-  it("is idempotent — skips when a memory_reflect row was already queued today", async () => {
+  it("is idempotent - skips when a memory_reflect row was already queued today", async () => {
     mockDbSelect.mockReturnValue(makeSelectChain([{ id: "existing" }]));
     await queueMemoryReflection("2026-08-12");
     expect(capturedInserts).toHaveLength(0);

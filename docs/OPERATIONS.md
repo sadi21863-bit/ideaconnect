@@ -51,7 +51,7 @@ them. Neither is committed.
 | `/api/cron/agents/rollup-weekly` | Sun 18:00 | weekly rollup |
 | `/api/cron/agents/rollup-monthly` | 1st 18:31 | monthly rollup |
 | `/api/cron/agents/catchup` | 12:00 daily | reset stuck in_progress rows |
-| GHA "Process AI Queue" | every 5 min | check-agents gate, then process-queue.ts |
+| GHA "Process AI Queue" | every 5 min declared | check-agents gate, self-heal missing participants/debate/memory, then process-queue.ts |
 
 All cron routes authenticate with `Authorization: Bearer $CRON_SECRET`. A
 `tick` route exists but is unscheduled (Vercel Hobby blocks sub-daily crons).

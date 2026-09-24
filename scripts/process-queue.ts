@@ -25,10 +25,13 @@ import {
   queueThemeResearch,
   queueThemeSelection,
   queueDailyIdeas,
+  queueAILabDebateOfDay,
   queueDailyArchive,
   queueWeeklyRollup,
   queueMonthlyRollup,
+  queueMemoryReflection,
 } from "@/lib/agents/scheduler";
+import { getParticipants } from "@/lib/agents/personas";
 
 const client = postgres(process.env.DATABASE_URL!, { prepare: false });
 const rawDb  = drizzle(client);
@@ -89,29 +92,39 @@ async function ensureDailyWorkQueued(): Promise<void> {
   // ── Ideas ────────────────────────────────────────────────────────────
   // Only seed ideas once the theme is in the DB (ideas reference the theme).
   if (themeInDb) {
-    // Only skip if ideas are pending/in_progress (actively queued) or if ideas
-    // actually exist in the DB. Completed/failed items don't block re-queuing —
-    // the content may have been deleted (e.g. manual cleanup).
-    const [ideasInDb] = await rawDb.execute(sql`
-      SELECT 1 FROM ideas
+    const participantIds = getParticipants().map((agent) => agent.id);
+    const ideaAuthors = await rawDb.execute(sql`
+      SELECT DISTINCT user_id
+      FROM ideas
       WHERE  room_id = ${process.env.AI_LAB_ROOM_ID}
         AND  DATE(created_at AT TIME ZONE 'UTC') = ${today}
-      LIMIT 1
-    `) as unknown as [unknown?];
+        AND  status = 'published'
+    `) as unknown as Array<{ user_id: string | null }>;
+    const completedParticipantIds = new Set(
+      ideaAuthors.map((row) => row.user_id).filter((id): id is string => Boolean(id))
+    );
+    const missingParticipantIds = participantIds.filter((id) => !completedParticipantIds.has(id));
 
-    const [ideasPending] = await rawDb.execute(sql`
-      SELECT 1 FROM ai_queue
-      WHERE  action_type = 'post_idea'
-        AND  created_at  >= (${today}::date)
-        AND  status IN ('pending', 'in_progress')
-      LIMIT 1
-    `) as unknown as [unknown?];
+    if (missingParticipantIds.length > 0) {
+      const activeIdeaAgents = await rawDb.execute(sql`
+        SELECT DISTINCT agent_id
+        FROM ai_queue
+        WHERE  action_type = 'post_idea'
+          AND  created_at >= (${today}::date)
+          AND  (
+            status IN ('pending', 'in_progress', 'rate_limited', 'deferred')
+            OR (status = 'failed' AND retry_count < 3)
+          )
+      `) as unknown as Array<{ agent_id: string | null }>;
+      const activeAgentIds = new Set(
+        activeIdeaAgents.map((row) => row.agent_id).filter((id): id is string => Boolean(id))
+      );
+      const stillMissing = missingParticipantIds.filter((id) => !activeAgentIds.has(id));
 
-    const ideasInQueue = ideasInDb ?? ideasPending;
-
-    if (!ideasInQueue) {
-      console.log(`[process-queue] No ideas queued for ${today} — queuing daily ideas`);
-      await queueDailyIdeas();
+      if (stillMissing.length > 0) {
+        console.log(`[process-queue] Requeueing missing participant ideas for ${today}: ${stillMissing.join(", ")}`);
+        await queueDailyIdeas(stillMissing);
+      }
     }
   }
 
@@ -164,6 +177,37 @@ async function ensureDailyWorkQueued(): Promise<void> {
     if (!todayArchiveInDb && !todayArchiveInQueue) {
       console.log(`[process-queue] No archive for ${today} — queuing archive`);
       await queueDailyArchive(today);
+    }
+  }
+
+  if (nowUTC.getUTCHours() >= 16) {
+    const [debateInQueue] = await rawDb.execute(sql`
+      SELECT 1
+      FROM ai_queue q
+      JOIN ideas i ON i.id = q.target_idea_id
+      WHERE q.action_type = 'ai_lab_debate'
+        AND DATE(i.created_at AT TIME ZONE 'UTC') = ${today}
+      LIMIT 1
+    `) as unknown as [unknown?];
+
+    if (!debateInQueue) {
+      console.log(`[process-queue] Ensuring Debate of the Day for ${today}`);
+      await queueAILabDebateOfDay(today);
+    }
+  }
+
+  if (nowUTC.getUTCHours() >= 19) {
+    const [memoryInQueue] = await rawDb.execute(sql`
+      SELECT 1
+      FROM ai_queue
+      WHERE action_type = 'memory_reflect'
+        AND created_at >= (${today}::date)
+      LIMIT 1
+    `) as unknown as [unknown?];
+
+    if (!memoryInQueue) {
+      console.log(`[process-queue] Ensuring memory reflection for ${today}`);
+      await queueMemoryReflection(today);
     }
   }
 }

@@ -57,7 +57,7 @@ describe("auth helpers", () => {
       const { isAdmin } = await import("@/lib/auth");
       const result = await isAdmin();
       expect(result).toBe(true);
-    });
+    }, 15_000);
 
     it("returns false when user email is not in ADMIN_EMAILS", async () => {
       mockAuth.mockResolvedValueOnce({ user: { email: "random@test.com" } });

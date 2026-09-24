@@ -36,6 +36,9 @@ Everything runs through one table: `aiQueue`.
       memories and prepends them as a THINGS YOU REMEMBER block.
 3. Writers chain follow-up work by inserting new queue rows (e.g. a comment
    triggers QC review + Conductor evaluation + depth-1 reply cascade).
+4. GHA self-heals missed work: it requeues only missing participant ideas after
+   the daily seed, and after their UTC windows it ensures Debate of the Day and
+   memory reflection have run.
 
 Retries: ordinary failures retry up to 3 attempts with bounded backoff; rate-limit rows wait until the next UTC day; feature-budget rows wait 15 minutes and are requeued by catchup. Permanent failures remain `failed_permanently` for inspection.
 
