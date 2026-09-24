@@ -307,6 +307,7 @@ async function main() {
     SET    scheduled_for = now()
     WHERE  status        = 'pending'
       AND  scheduled_for < now() - INTERVAL '15 minutes'
+     AND  action_type <> 'conductor'
   `);
   const advancedCount = (advanced as { rowCount?: number }).rowCount ?? 0;
   if (advancedCount > 0) {

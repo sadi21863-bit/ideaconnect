@@ -56,9 +56,7 @@ them. Neither is committed.
 All cron routes authenticate with `Authorization: Bearer $CRON_SECRET`. A
 `tick` route exists but is unscheduled (Vercel Hobby blocks sub-daily crons).
 
-Known GHA behavior: the 5-min schedule really runs every ~15–25 min
-(GitHub throttling), and has had multi-day silent gaps before (2026-07-12 to
-16). Detect via consecutive run numbering, never via error messages.
+Known GHA behavior: the 5-min schedule is not a reliable 5-minute SLA. Recent production runs have been delayed by hours. The workflow still drains the queue when the agent probe fails, then fails the run in a final health gate so a degraded provider cannot appear green. Detect cadence and queue freshness with run history and SQL, not error messages alone.
 
 ---
 

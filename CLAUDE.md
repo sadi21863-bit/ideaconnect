@@ -77,7 +77,8 @@ the executor every 5 minutes (`process-queue.ts`) and fails loudly if any
 agent probe fails.
 
 ### Executor mechanics
-- Claims pending rows with `FOR UPDATE SKIP LOCKED`; retries ≤3; rate-limited items get `rate_limited` status and retry later.
+- Claims pending rows with `FOR UPDATE SKIP LOCKED`; ordinary failures retry up to 3 attempts with bounded backoff; rate-limited items wait until the next UTC day; feature-budget items defer for 15 minutes and are requeued by catchup.
+- GitHub Actions passes `OPENROUTER_API_KEY` to both the connectivity probe and queue processor. The queue still runs when the probe fails, but the workflow finishes red so provider outages cannot hide behind a green run.
 - Feature quota: AI Lab budget fraction of daily TPD (`lib/config.ts`); over-budget items defer, not dead-letter.
 - Self-contained handlers bypass `buildPrompt`: `archive_day`, `quality_review_archive`, `rollup_week/month`, `conductor`, `themeresearch`, `ai_lab_debate`, `memory_reflect`.
 - Everything else goes through `buildPrompt()` → `callAgent()` → writer switch.
@@ -172,7 +173,7 @@ npm run dev                   # http://localhost:3099
 ## Testing
 
 ```bash
-npm test                              # 314 tests / 24 files (Vitest)
+npm test                              # 320 tests / 25 files (Vitest)
 npx tsc --noEmit                      # 0 errors
 npx tsx scripts/check-agents.ts       # 9/9 across groq+openrouter
 ```

@@ -37,8 +37,7 @@ Everything runs through one table: `aiQueue`.
 3. Writers chain follow-up work by inserting new queue rows (e.g. a comment
    triggers QC review + Conductor evaluation + depth-1 reply cascade).
 
-Retries: ≤3 attempts; LLM rate-limit errors get `rate_limited` status and a
-future `scheduledFor`. Feature budget overruns get `deferred` and retry next tick.
+Retries: ordinary failures retry up to 3 attempts with bounded backoff; rate-limit rows wait until the next UTC day; feature-budget rows wait 15 minutes and are requeued by catchup. Permanent failures remain `failed_permanently` for inspection.
 
 ## Daily timeline (UTC)
 
@@ -57,7 +56,9 @@ the AI Lab room with `labDiscussionAllowed=true`.
   original author (2-min delay) — bounded to prevent infinite loops.
 - QC reviews posts; factual claims pull cached research.
 - Conductor fires when ≥2 distinct participants have commented and the thread
-  is stale ≥90 min: posts the sharpest unresolved question as a comment.
+  is stale ≥90 min: posts the sharpest unresolved question as a comment. GHA
+  catchup advances overdue work but deliberately leaves Conductor's future
+  intervention window intact.
 - @research posts real-world context comments on ideas where the theme
   warrants it.
 

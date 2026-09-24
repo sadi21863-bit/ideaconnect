@@ -22,7 +22,7 @@
 
 import { db } from "@/db";
 import { aiQueue, aiUsage, aiModerationLog } from "@/db/schema";
-import { and, eq, gte, inArray, lt, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, lt, lte, sql } from "drizzle-orm";
 import { getAgent } from "./personas";
 import { callAgent } from "./providers/index";
 import { buildPrompt } from "./prompts";
@@ -45,9 +45,19 @@ import {
 
 // ─── Public entry point ───────────────────────────────────────────────
 
+function nextUtcMidnight(): Date {
+  const next = new Date();
+  next.setUTCHours(24, 0, 0, 0);
+  return next;
+}
+
+function retryDelayMs(retryCount: number): number {
+  return Math.min(30_000 * 2 ** Math.max(retryCount - 1, 0), 15 * 60_000);
+}
+
 export async function processQueue(
   limit = 5
-): Promise<{ processed: number; failed: number; errors: Array<{ id: string; agentId: string; actionType: string; error: string }> }> {
+): Promise<{ processed: number; failed: number; deferred: number; errors: Array<{ id: string; agentId: string; actionType: string; error: string }> }> {
   // Step 1: Atomically claim pending rows.
   // FOR UPDATE SKIP LOCKED ensures no two concurrent workers process the same row.
   const claimedIds = await db.transaction(async (tx) => {
@@ -72,9 +82,8 @@ export async function processQueue(
     return ids;
   });
 
-  if (claimedIds.length === 0) return { processed: 0, failed: 0, errors: [] };
+  if (claimedIds.length === 0) return { processed: 0, failed: 0, deferred: 0, errors: [] };
 
-  // Step 2: Fetch full rows for claimed IDs
   const items = await db
     .select()
     .from(aiQueue)
@@ -82,11 +91,16 @@ export async function processQueue(
 
   let processed = 0;
   let failed    = 0;
+  let deferred  = 0;
   const errors: Array<{ id: string; agentId: string; actionType: string; error: string }> = [];
 
   for (const item of items) {
     try {
-      await executeItem(item);
+      const outcome = await executeItem(item);
+      if (outcome === "deferred") {
+        deferred++;
+        continue;
+      }
       await db
         .update(aiQueue)
         .set({ status: "completed", executedAt: new Date() })
@@ -95,17 +109,34 @@ export async function processQueue(
     } catch (err) {
       const message       = err instanceof Error ? err.message : String(err);
       const isRateLimited = message.startsWith("rate_limited");
-      const newRetryCount = (item.retryCount ?? 0) + 1;
-      const isPermanent   = !isRateLimited && newRetryCount >= 3;
-      const status        = isRateLimited
+      const isDeferred    = message.startsWith("quota_deferred");
+      if (isDeferred) {
+        deferred++;
+        continue;
+      }
+
+      const newRetryCount = isRateLimited
+        ? item.retryCount ?? 0
+        : (item.retryCount ?? 0) + 1;
+      const isPermanent = !isRateLimited && newRetryCount >= 3;
+      const status = isRateLimited
         ? "rate_limited"
         : isPermanent
           ? "failed_permanently"
-          : "failed";
+          : "pending";
+      const scheduledFor = isRateLimited
+        ? nextUtcMidnight()
+        : new Date(Date.now() + retryDelayMs(newRetryCount));
 
       await db
         .update(aiQueue)
-        .set({ status, errorMessage: message, executedAt: new Date(), retryCount: newRetryCount })
+        .set({
+          status,
+          errorMessage: message,
+          executedAt: new Date(),
+          scheduledFor,
+          retryCount: newRetryCount,
+        })
         .where(eq(aiQueue.id, item.id));
 
       if (isPermanent) {
@@ -119,22 +150,26 @@ export async function processQueue(
     }
   }
 
-  return { processed, failed, errors };
+  return { processed, failed, deferred, errors };
 }
 
 /**
- * Resets queue rows stuck in `in_progress` for longer than 10 minutes.
- * Vercel function timeouts leave rows claimed but never completed — this
- * is the safety net. Called by the catchup cron before processQueue.
- * Uses scheduledFor (never null) rather than executedAt (null on first claim).
+ * Resets stale and recoverable queue rows before the next processing pass.
+ * Recoverable rows are limited to recent failures and rows whose retry time
+ * has arrived, so historical dead letters are not replayed in bulk.
  */
 export async function resetStuckQueueItems(): Promise<number> {
-  const staleThreshold = new Date(Date.now() - 10 * 60 * 1000);
+  const now = new Date();
+  const staleThreshold = new Date(now.getTime() - 10 * 60 * 1000);
+  const recentFailureCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-  // Reset items stuck in_progress > 10 min
   const stuckReset = await db
     .update(aiQueue)
-    .set({ status: "pending", errorMessage: "reset by catchup — was stuck in_progress" })
+    .set({
+      status: "pending",
+      errorMessage: "reset by catchup — was stuck in_progress",
+      scheduledFor: now,
+    })
     .where(and(
       eq(aiQueue.status, "in_progress"),
       lt(aiQueue.scheduledFor, staleThreshold),
@@ -142,19 +177,40 @@ export async function resetStuckQueueItems(): Promise<number> {
     ))
     .returning({ id: aiQueue.id });
 
-  // Re-queue deferred items — quota resets at midnight UTC, so they're eligible again
   const deferredReset = await db
     .update(aiQueue)
-    .set({ status: "pending", errorMessage: null })
-    .where(eq(aiQueue.status, "deferred"))
+    .set({ status: "pending", errorMessage: null, scheduledFor: now })
+    .where(and(
+      eq(aiQueue.status, "deferred"),
+      lte(aiQueue.scheduledFor, now),
+    ))
     .returning({ id: aiQueue.id });
 
-  return stuckReset.length + deferredReset.length;
+  const rateLimitedReset = await db
+    .update(aiQueue)
+    .set({ status: "pending", errorMessage: null, scheduledFor: now })
+    .where(and(
+      eq(aiQueue.status, "rate_limited"),
+      lte(aiQueue.scheduledFor, now),
+    ))
+    .returning({ id: aiQueue.id });
+
+  const failedReset = await db
+    .update(aiQueue)
+    .set({ status: "pending", scheduledFor: now })
+    .where(and(
+      eq(aiQueue.status, "failed"),
+      lt(aiQueue.retryCount, 3),
+      gte(aiQueue.executedAt, recentFailureCutoff),
+    ))
+    .returning({ id: aiQueue.id });
+
+  return stuckReset.length + deferredReset.length + rateLimitedReset.length + failedReset.length;
 }
 
 // ─── Per-item execution ───────────────────────────────────────────────
 
-async function executeItem(item: AIQueue): Promise<void> {
+async function executeItem(item: AIQueue): Promise<"completed" | "deferred"> {
   const agent = getAgent(item.agentId);
   if (!agent) throw new Error(`Agent not found: ${item.agentId}`);
 
@@ -197,7 +253,7 @@ async function executeItem(item: AIQueue): Promise<void> {
       reviewedAt:       new Date(),
     }).catch(() => null);
     console.log(`[executor] quota_exceeded for ${featureLabel} — item ${item.id} deferred`);
-    return;
+    return "deferred";
   }
 
   // Self-contained handlers — fetch their own data, manage their own LLM calls
@@ -211,27 +267,27 @@ async function executeItem(item: AIQueue): Promise<void> {
     const { citations, source } = await fetchResearch(query, date);
     console.log(`[executor] themeresearch: ${citations.length} citations from ${source}`);
     await db.update(aiQueue).set({ status: "completed" }).where(eq(aiQueue.id, item.id));
-    return;
+    return "completed";
   }
 
   if (item.actionType === "archive_day") {
     await executeArchiveDay(agent, item, today);
-    return;
+    return "completed";
   }
 
   if (item.actionType === "quality_review_archive") {
     await executeQualityReviewArchive(agent, item, today);
-    return;
+    return "completed";
   }
 
   if (item.actionType === "rollup_week") {
     await executeRollupWeek(agent, item, today);
-    return;
+    return "completed";
   }
 
   if (item.actionType === "rollup_month") {
     await executeRollupMonth(agent, item, today);
-    return;
+    return "completed";
   }
 
   // conductor: builds its own prompt inline (writeConductorQuestion) and posts
@@ -241,17 +297,17 @@ async function executeItem(item: AIQueue): Promise<void> {
   // case "conductor" branch in the writer switch further down.
   if (item.actionType === "conductor") {
     await writeConductorQuestion(agent.id, item);
-    return;
+    return "completed";
   }
 
   if (item.actionType === "ai_lab_debate") {
     await executeAILabDebate(agent, item, today);
-    return;
+    return "completed";
   }
 
   if (item.actionType === "memory_reflect") {
     await executeMemoryReflection(agent, item, today);
-    return;
+    return "completed";
   }
 
   // Research pre-call for participant and QC actions.
@@ -375,4 +431,5 @@ async function executeItem(item: AIQueue): Promise<void> {
         tokens:        sql`${aiUsage.tokens} + ${usageOut.tokens}`,
       },
     });
+  return "completed";
 }

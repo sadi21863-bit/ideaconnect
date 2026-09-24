@@ -50,7 +50,9 @@ const mockDbUpdate = vi.hoisted(() =>
     set: (data: Record<string, unknown>) => ({
       where: (cond: unknown) => {
         dbState.capturedUpdates.push({ id: String(cond), data });
-        return Promise.resolve(undefined);
+        return Object.assign(Promise.resolve(undefined), {
+          returning: vi.fn().mockResolvedValue([{ id: "reset" }]),
+        });
       },
     }),
   }))
@@ -63,6 +65,7 @@ const mockDbInsert = vi.hoisted(() =>
       return {
         returning: vi.fn().mockResolvedValue([{ id: "new-result-id" }]),
         onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
+        catch: vi.fn().mockResolvedValue(undefined),
       };
     },
   }))
@@ -81,7 +84,7 @@ vi.mock("@/lib/agents/providers/index", () => ({
   callAgent: mockCallAgent,
 }));
 
-import { processQueue } from "@/lib/agents/executor";
+import { processQueue, resetStuckQueueItems } from "@/lib/agents/executor";
 
 // ─── Test helpers ─────────────────────────────────────────────────────
 
@@ -99,7 +102,9 @@ function resetState() {
     set: (data: Record<string, unknown>) => ({
       where: (cond: unknown) => {
         dbState.capturedUpdates.push({ id: String(cond), data });
-        return Promise.resolve(undefined);
+        return Object.assign(Promise.resolve(undefined), {
+          returning: vi.fn().mockResolvedValue([{ id: "reset" }]),
+        });
       },
     }),
   }));
@@ -146,6 +151,7 @@ function resetState() {
       return {
         returning: vi.fn().mockResolvedValue([{ id: "new-result-id" }]),
         onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
+        catch: vi.fn().mockResolvedValue(undefined),
       };
     },
   }));
@@ -213,14 +219,39 @@ describe("processQueue — rate limiting", () => {
 
     expect(mockCallAgent).toHaveBeenCalledOnce();
   });
-});
+  it("marks the third ordinary failure as permanently failed", async () => {
+    dbState.transactionItems = [{ id: "item-1" }];
+    dbState.fullQueueItems   = [makeQueueItem({ retryCount: 2 })];
+    dbState.usageRows        = [];
 
-// ─── Empty response guard (the spec's critical test) ──────────────────
+    mockCallAgent.mockRejectedValueOnce(new Error("network error"));
+
+    await processQueue(1);
+
+    const permanentUpdate = dbState.capturedUpdates.find(
+      (u) => u.data.status === "failed_permanently"
+    );
+    expect(permanentUpdate?.data.retryCount).toBe(3);
+  });
+
+  it("defers quota-exceeded items without marking them completed", async () => {
+    dbState.transactionItems = [{ id: "item-1" }];
+    dbState.fullQueueItems   = [makeQueueItem()];
+    dbState.usageRows        = [{ requestCount: 0, total: 1_000_000 }];
+
+    const result = await processQueue(1);
+
+    expect(result.processed).toBe(0);
+    expect(result.deferred).toBe(1);
+    expect(dbState.capturedUpdates.some((u) => u.data.status === "completed")).toBe(false);
+    expect(dbState.capturedUpdates.some((u) => u.data.status === "deferred")).toBe(true);
+  });
+});
 
 describe("processQueue — empty response after cleanup", () => {
   beforeEach(resetState);
 
-  it("marks queue item failed when callAgent returns only thinking tags (post_idea)", async () => {
+  it("requeues queue item when callAgent returns only thinking tags (post_idea)", async () => {
     dbState.transactionItems = [{ id: "item-1" }];
     dbState.fullQueueItems   = [makeQueueItem({
       agentId:    "ai_llama",
@@ -240,15 +271,15 @@ describe("processQueue — empty response after cleanup", () => {
     );
     expect(ideaInsert).toBeUndefined();
 
-    // Queue item marked failed
-    const failedUpdate = dbState.capturedUpdates.find(
-      (u) => u.data.status === "failed"
+    const retryUpdate = dbState.capturedUpdates.find(
+      (u) => u.data.status === "pending"
     );
-    expect(failedUpdate).toBeDefined();
-    expect(failedUpdate?.data.errorMessage).toContain("Empty response after cleanup");
+    expect(retryUpdate).toBeDefined();
+    expect(retryUpdate?.data.retryCount).toBe(1);
+    expect(retryUpdate?.data.errorMessage).toContain("Empty response after cleanup");
   });
 
-  it("marks queue item failed when callAgent returns empty string directly", async () => {
+  it("requeues queue item when callAgent returns empty string directly", async () => {
     dbState.transactionItems = [{ id: "item-1" }];
     dbState.fullQueueItems   = [makeQueueItem({ agentId: "ai_llama", actionType: "post_idea" })];
     dbState.usageRows        = [];
@@ -257,13 +288,15 @@ describe("processQueue — empty response after cleanup", () => {
 
     await processQueue(1);
 
-    const failedUpdate = dbState.capturedUpdates.find(
-      (u) => u.data.status === "failed"
+    const retryUpdate = dbState.capturedUpdates.find(
+      (u) => u.data.status === "pending"
     );
-    expect(failedUpdate?.data.errorMessage).toContain("Empty response after cleanup");
+    expect(retryUpdate).toBeDefined();
+    expect(retryUpdate?.data.retryCount).toBe(1);
+    expect(retryUpdate?.data.errorMessage).toContain("Empty response after cleanup");
   });
 
-  it("marks queue item failed when idea content is too short (< 50 chars)", async () => {
+  it("requeues queue item when idea content is too short (< 50 chars)", async () => {
     dbState.transactionItems = [{ id: "item-1" }];
     dbState.fullQueueItems   = [makeQueueItem({ agentId: "ai_llama", actionType: "post_idea" })];
     dbState.usageRows        = [];
@@ -274,8 +307,8 @@ describe("processQueue — empty response after cleanup", () => {
 
     await processQueue(1);
 
-    const failedUpdate = dbState.capturedUpdates.find((u) => u.data.status === "failed");
-    expect(failedUpdate).toBeDefined();
+    const retryUpdate = dbState.capturedUpdates.find((u) => u.data.status === "pending");
+    expect(retryUpdate).toBeDefined();
   });
 });
 
@@ -365,9 +398,9 @@ describe("processQueue — success path", () => {
 
     await processQueue(1);
 
-    // The error should mark the queue item failed
-    const failedUpdate = dbState.capturedUpdates.find((u) => u.data.status === "failed");
-    expect(failedUpdate).toBeDefined();
+    const retryUpdate = dbState.capturedUpdates.find((u) => u.data.status === "pending");
+    expect(retryUpdate).toBeDefined();
+    expect(retryUpdate?.data.retryCount).toBe(1);
 
     // Usage should NOT have been inserted (failure before usage increment)
     const usageInsert = dbState.capturedInserts.find((i) =>
@@ -465,7 +498,19 @@ describe("processQueue — empty queue", () => {
 
     const result = await processQueue(5);
 
-    expect(result).toEqual({ processed: 0, failed: 0, errors: [] });
+    expect(result).toEqual({ processed: 0, failed: 0, deferred: 0, errors: [] });
     expect(mockCallAgent).not.toHaveBeenCalled();
+  });
+});
+
+describe("resetStuckQueueItems", () => {
+  it("requeues stale and recoverable rows", async () => {
+    resetState();
+
+    const recovered = await resetStuckQueueItems();
+
+    expect(recovered).toBe(4);
+    expect(dbState.capturedUpdates).toHaveLength(4);
+    expect(dbState.capturedUpdates.every((u) => u.data.status === "pending")).toBe(true);
   });
 });
