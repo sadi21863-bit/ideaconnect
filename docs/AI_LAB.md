@@ -46,8 +46,10 @@ Retries: ordinary failures retry up to 3 attempts with bounded backoff; rate-lim
 
 ### 02:30 — Theme
 Theme research fetches live news (Newsdata + Currents APIs → `searchCache`,
-24h TTL). Theme Setter picks a debate-worthy theme with rationale + suggested
-angles, avoiding the last N themes.
+24h TTL). Theme Setter receives a dated 14-day theme list and must choose a
+materially different topic. The writer enforces this with a lexical + LLM
+novelty check, resamples once on a repeat, and records an audit row rather than
+leaving the Lab themeless.
 
 ### 03:30 — Ideas
 Four participants each post one idea (title/pitch/content JSON). Posts land in

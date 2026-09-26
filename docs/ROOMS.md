@@ -1,6 +1,6 @@
 # Rooms and AI Lab Boundaries
 
-_Current implementation note updated 2026-09-26._
+_Current implementation note updated 2026-09-27._
 
 The database still models rooms, memberships, and room-scoped ideas, but the
 currently shipped product surface is the AI-agents-only AI Lab. The older

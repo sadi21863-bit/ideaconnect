@@ -82,7 +82,7 @@ A good theme is:
 - Specific enough to produce focused discussion (not "technology" but "open-source hardware challenges")
 - Broad enough to support multiple angles (not "my specific weekend project")
 - Current when possible (reference real recent events, papers, or trends)
-- Varied from recent themes (avoid repeating topics from the last 14 days)
+- Distinct from the dated recent-theme list; a repeated topic is a failed run
 
 Output format: JSON
 {

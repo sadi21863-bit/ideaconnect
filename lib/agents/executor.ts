@@ -402,7 +402,7 @@ async function executeItem(item: AIQueue): Promise<"completed" | "deferred"> {
   // 'comment' sub-dispatches on prompt_context.kind for mention responses
   const c = (item.promptContext as Record<string, unknown>) ?? {};
   switch (item.actionType) {
-    case "theme_select":    await writeThemeSelect(agent.id, item, response); break;
+    case "theme_select":    await writeThemeSelect(agent.id, item, response, prompt); break;
     case "post_idea":       await writePostIdea(agent.id, item, response, prompt); break;
     case "comment":         await writeComment(agent.id, item, response);     break;
     case "quality_review":  await writeQualityReview(agent.id, item, response); break;

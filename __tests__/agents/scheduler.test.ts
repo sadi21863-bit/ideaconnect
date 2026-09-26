@@ -104,13 +104,36 @@ describe("queueThemeSelection", () => {
   });
 
   it("includes recentThemes from DB in promptContext", async () => {
-    mockDbSelect.mockReturnValue(
-      makeSelectChain([{ theme: "AI safety" }, { theme: "Quantum" }])
-    );
+    mockDbSelect
+      .mockReturnValueOnce(makeSelectChain([]))
+      .mockReturnValueOnce(makeSelectChain([]))
+      .mockReturnValueOnce(makeSelectChain([
+        { date: "2026-09-24", theme: "AI safety" },
+        { date: "2026-09-23", theme: "Quantum" },
+      ]))
+      .mockReturnValueOnce(makeSelectChain([]));
     resetCaptures();
     await queueThemeSelection();
     const ctx = lastInsert().promptContext as Record<string, unknown>;
     expect(ctx.recentThemes).toEqual(["AI safety", "Quantum"]);
+    expect(ctx.recentThemesWithDates).toEqual([
+      { date: "2026-09-24", theme: "AI safety" },
+      { date: "2026-09-23", theme: "Quantum" },
+    ]);
+  });
+
+  it("skips when today's theme already exists", async () => {
+    mockDbSelect.mockReturnValueOnce(makeSelectChain([{ id: "theme-today" }]));
+    await queueThemeSelection();
+    expect(capturedInserts).toHaveLength(0);
+  });
+
+  it("skips when a theme selection is already pending today", async () => {
+    mockDbSelect
+      .mockReturnValueOnce(makeSelectChain([]))
+      .mockReturnValueOnce(makeSelectChain([{ id: "queue-today" }]));
+    await queueThemeSelection();
+    expect(capturedInserts).toHaveLength(0);
   });
 });
 

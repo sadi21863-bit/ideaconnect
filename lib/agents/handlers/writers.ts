@@ -9,14 +9,15 @@ import { queueCommentsOnIdea, queueConductorIntervention, queueQualityReview, qu
 import { parseJsonResponse } from "../json-helpers";
 import { stripThinkingTags } from "../response-cleaner";
 import { buildPrompt } from "../prompts";
-import { checkIdeaNovelty, LEXICAL_TRIGGER } from "../novelty";
+import { checkIdeaNovelty, checkThemeNovelty, LEXICAL_TRIGGER } from "../novelty";
 import type { AIQueue } from "@/db/schema";
 import { AI_LAB_ROOM_ID, MIN_CONTENT_LENGTH } from "./shared";
 
 export async function writeThemeSelect(
   agentId: string,
   item:    AIQueue,
-  response: string
+  response: string,
+  basePrompt?: string
 ): Promise<void> {
   let parsed: { theme: string; rationale?: string; suggested_angles?: string[] };
   try {
@@ -28,12 +29,41 @@ export async function writeThemeSelect(
     throw new Error("Empty response after cleanup");
   }
 
+  let theme = parsed.theme.trim();
+  let repeatReason: string | null = null;
+  const firstCheck = await checkThemeNovelty(theme);
+  if (!firstCheck.novel) {
+    const agent = getAgent(agentId);
+    if (agent) {
+      const nudge =
+        `\n\nIMPORTANT: This theme overlaps a recent Lab theme ("${firstCheck.closestTitle ?? "a recent theme"}"). ` +
+        `Choose a clearly different domain or a distinct sub-question. Do not restate the overlapping topic.`;
+      try {
+        const retryRaw = stripThinkingTags(
+          await callAgent(agent, `${basePrompt ?? buildPrompt(item)}${nudge}`, { jsonMode: true })
+        );
+        const retryParsed = parseJsonResponse(retryRaw) as typeof parsed;
+        if (retryParsed.theme?.trim()) {
+          theme = retryParsed.theme.trim();
+          parsed = retryParsed;
+        }
+      } catch (e) {
+        console.warn("[executor] theme resample failed, keeping original:", (e as Error).message);
+      }
+    }
+
+    const recheck = await checkThemeNovelty(theme, { llmVerdict: false });
+    if (!recheck.novel) {
+      repeatReason = `Theme "${theme}" overlapped "${recheck.closestTitle ?? "a recent theme"}" (sim=${recheck.maxSimilarity.toFixed(2)}) after one resample.`;
+    }
+  }
+
   const today = new Date().toISOString().slice(0, 10);
   await db
     .insert(aiThemes)
     .values({
       date:          today,
-      theme:         parsed.theme.trim(),
+      theme,
       rationale:     parsed.rationale   ?? null,
       researchNotes: parsed.suggested_angles
         ? { suggested_angles: parsed.suggested_angles }
@@ -43,13 +73,24 @@ export async function writeThemeSelect(
     .onConflictDoUpdate({
       target: aiThemes.date,
       set: {
-        theme:         parsed.theme.trim(),
+        theme,
         rationale:     parsed.rationale ?? null,
         researchNotes: parsed.suggested_angles
           ? { suggested_angles: parsed.suggested_angles }
           : null,
       },
     });
+
+  if (repeatReason) {
+    await db.insert(aiModerationLog).values({
+      moderatorAgentId: "system",
+      targetType:       "theme_repeat",
+      targetId:         item.id,
+      verdict:          "accepted",
+      reason:           repeatReason,
+      reviewedAt:       new Date(),
+    }).catch(() => null);
+  }
 }
 
 export async function writePostIdea(

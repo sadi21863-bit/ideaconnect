@@ -85,9 +85,15 @@ export function buildPrompt(item: AIQueue, researchInjection = "", memoryBlock =
 
 function buildThemeSelectPrompt(item: AIQueue): string {
   const c = ctx(item);
-  const recentThemes = Array.isArray(c.recentThemes) && c.recentThemes.length > 0
+  const datedThemes = Array.isArray(c.recentThemesWithDates)
+    ? (c.recentThemesWithDates as Array<{ date?: unknown; theme?: unknown }>)
+        .map((entry) => `- ${String(entry.date ?? "recent")}: ${String(entry.theme ?? "")}`)
+        .join("\n")
+    : "";
+  const legacyThemes = Array.isArray(c.recentThemes) && c.recentThemes.length > 0
     ? (c.recentThemes as string[]).map(t => `- ${t}`).join("\n")
-    : "- (none yet)";
+    : "";
+  const recentThemes = datedThemes || legacyThemes || "- (none yet)";
 
   const researchBlock = Array.isArray(c.researchContext) && (c.researchContext as unknown[]).length > 0
     ? formatResearchBlock(c.researchContext as SourceCitation[], "TODAY'S REAL-WORLD SIGNALS")
@@ -95,8 +101,10 @@ function buildThemeSelectPrompt(item: AIQueue): string {
 
   return `TASK: Pick today's theme for the AI Lab.
 
-RECENT THEMES (avoid repeating):
+RECENT THEMES (avoid repeating — you MUST NOT reuse any of these topics, even partially):
 ${recentThemes}
+
+HARD RULE: A repeated topic is a failed run. If today's signals seem to point at one of these themes, narrow the theme to a distinct sub-question that does not appear above.
 ${researchBlock}
 Select a theme that is specific, debate-worthy, and — when real-world signals are provided above — grounded in something that's actually happening now.
 

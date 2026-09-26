@@ -10,7 +10,7 @@
 
 import { db } from "@/db";
 import { aiQueue, aiThemes, ideas, ideaComments, searchCache } from "@/db/schema";
-import { and, asc, desc, eq, gte, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lt } from "drizzle-orm";
 import { z } from "zod";
 import { ALL_AGENTS, getAdmins, getConductor, getParticipants } from "./personas";
 import { getThemeQuery } from "./research";
@@ -36,6 +36,10 @@ const SourceCitationSchema = z.object({
 
 const ThemeSelectContext = z.object({
   recentThemes:    z.array(z.string()),
+  recentThemesWithDates: z.array(z.object({
+    date:  z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date must be YYYY-MM-DD"),
+    theme: z.string().min(1),
+  })).optional(),
   researchContext: z.array(SourceCitationSchema).max(10).optional(),
 });
 
@@ -156,9 +160,39 @@ export async function queueThemeSelection(): Promise<void> {
   const themeSetter = getAdmins().find((a) => a.role === "theme_setter");
   if (!themeSetter) throw new Error("Theme Setter agent not found");
 
-  const recentRows = await db
-    .select({ theme: aiThemes.theme })
+  const today = new Date().toISOString().slice(0, 10);
+  const cutoff = new Date();
+  cutoff.setUTCDate(cutoff.getUTCDate() - 14);
+  const cutoffDate = cutoff.toISOString().slice(0, 10);
+
+  const [existingTheme] = await db
+    .select({ id: aiThemes.id })
     .from(aiThemes)
+    .where(eq(aiThemes.date, today))
+    .limit(1);
+  if (existingTheme) {
+    console.log("[scheduler] Theme already exists for today, skipping queue.");
+    return;
+  }
+
+  const [existingQueueItem] = await db
+    .select({ id: aiQueue.id })
+    .from(aiQueue)
+    .where(and(
+      eq(aiQueue.actionType, "theme_select"),
+      gte(aiQueue.createdAt, new Date(`${today}T00:00:00Z`)),
+      inArray(aiQueue.status, ["pending", "in_progress"])
+    ))
+    .limit(1);
+  if (existingQueueItem) {
+    console.log("[scheduler] Theme selection already queued for today, skipping queue.");
+    return;
+  }
+
+  const recentRows = await db
+    .select({ date: aiThemes.date, theme: aiThemes.theme })
+    .from(aiThemes)
+    .where(and(gte(aiThemes.date, cutoffDate), lt(aiThemes.date, today)))
     .orderBy(desc(aiThemes.date))
     .limit(14);
 
@@ -167,7 +201,7 @@ export async function queueThemeSelection(): Promise<void> {
   // cannot swap the theme's citations. getThemeQuery() is deterministic per
   // date (day-of-year bank in research.ts).
   const expectedQuery = getThemeQuery();
-  const startOfDay = new Date(new Date().setHours(0, 0, 0, 0));
+  const startOfDay = new Date(new Date().setUTCHours(0, 0, 0, 0));
   const researchRows = await db
     .select({ results: searchCache.results, source: searchCache.source })
     .from(searchCache)
@@ -179,6 +213,10 @@ export async function queueThemeSelection(): Promise<void> {
 
   const ctx_themeselect = {
     recentThemes:    recentRows.map((r) => r.theme),
+    recentThemesWithDates: recentRows.map((r) => ({
+      date:  String(r.date),
+      theme: String(r.theme),
+    })),
     researchContext,
   };
   if (!validateContext(ThemeSelectContext, ctx_themeselect, "theme_select")) return;
@@ -188,7 +226,7 @@ export async function queueThemeSelection(): Promise<void> {
     actionType:   "theme_select",
     roomId:       AI_LAB_ROOM_ID,
     promptContext: ctx_themeselect,
-    scheduledFor: new Date(),
+    scheduledFor:  new Date(),
     priority:     1,
     status:       "pending",
   });

@@ -1,6 +1,6 @@
 import { db } from "@/db";
-import { ideas } from "@/db/schema";
-import { and, desc, eq, gte } from "drizzle-orm";
+import { aiThemes, ideas } from "@/db/schema";
+import { and, desc, eq, gte, lt } from "drizzle-orm";
 import { callGroq } from "./providers/groq";
 import { tokenizeText } from "./handlers/memory";
 import { parseJsonResponse } from "./json-helpers";
@@ -18,6 +18,7 @@ const AI_LAB_ROOM_ID = process.env.AI_LAB_ROOM_ID!;
 
 /** Jaccard tripwire — at/above this, the candidate needs an LLM verdict. */
 export const LEXICAL_TRIGGER = 0.3;
+export const THEME_LEXICAL_TRIGGER = 0.5;
 /** Lookback window for the recent-idea corpus. */
 export const NOVELTY_WINDOW_DAYS = 14;
 /** Max candidates sent to the verdict model. */
@@ -49,46 +50,41 @@ export interface NoveltyCheck {
   reason: string | null;
 }
 
-export async function checkIdeaNovelty(
+interface NoveltyCorpusItem {
+  id: string;
+  title: string;
+  pitch: string;
+}
+
+async function runNoveltyCheck(
   title: string,
   pitch: string,
-  opts: { llmVerdict?: boolean } = {}
+  corpus: NoveltyCorpusItem[],
+  opts: { llmVerdict?: boolean; lexicalTrigger?: number; subject?: "idea" | "theme" } = {}
 ): Promise<NoveltyCheck> {
-  const { llmVerdict = true } = opts;
-  const cutoff = new Date();
-  cutoff.setUTCDate(cutoff.getUTCDate() - NOVELTY_WINDOW_DAYS);
-
-  const recent = await db
-    .select({ id: ideas.id, title: ideas.title, pitch: ideas.context })
-    .from(ideas)
-    .where(
-      and(
-        eq(ideas.roomId, AI_LAB_ROOM_ID),
-        eq(ideas.status, "published"),
-        gte(ideas.createdAt, cutoff)
-      )
-    )
-    .orderBy(desc(ideas.createdAt))
-    .limit(60);
-
+  const {
+    llmVerdict = true,
+    lexicalTrigger = LEXICAL_TRIGGER,
+    subject = "idea",
+  } = opts;
   const candidateTokens = tokenizeText(`${title} ${pitch}`);
-  const scored: NoveltyCandidate[] = recent.map((r) => ({
-    id: String(r.id),
-    title: String(r.title ?? ""),
-    pitch: String(r.pitch ?? ""),
+  const scored: NoveltyCandidate[] = corpus.map((r) => ({
+    id: r.id,
+    title: r.title,
+    pitch: r.pitch,
     similarity: jaccardSimilarity(
       candidateTokens,
-      tokenizeText(`${r.title ?? ""} ${r.pitch ?? ""}`)
+      tokenizeText(`${r.title} ${r.pitch}`)
     ),
   }));
   scored.sort((x, y) => y.similarity - x.similarity);
 
   const maxSimilarity = scored.length > 0 ? scored[0].similarity : 0;
-  const suspicious = scored.filter((s) => s.similarity >= LEXICAL_TRIGGER).slice(0, VERDICT_CANDIDATES);
+  const suspicious = scored.filter((s) => s.similarity >= lexicalTrigger).slice(0, VERDICT_CANDIDATES);
 
   if (suspicious.length === 0 || !llmVerdict) {
     return {
-      novel: maxSimilarity < LEXICAL_TRIGGER,
+      novel: maxSimilarity < lexicalTrigger,
       maxSimilarity,
       closestId: scored.length > 0 ? scored[0].id : null,
       closestTitle: scored.length > 0 ? scored[0].title : null,
@@ -96,17 +92,15 @@ export async function checkIdeaNovelty(
     };
   }
 
-  // ── Stage 2: LLM verdict on the suspicious subset ──────────────────
-  // Fail OPEN on provider errors — a down Groq must not stall the Lab.
   try {
     const prompt =
-      `You are deciding whether a newly drafted AI Lab idea is substantively a duplicate of a recent idea.\n\n` +
+      `You are deciding whether a newly drafted AI Lab ${subject} is substantively a duplicate of a recent ${subject}.\n\n` +
       `CANDIDATE:\nTitle: "${title}"\nPitch: "${pitch}"\n\n` +
-      `RECENT IDEAS (lexically similar):\n` +
+      `RECENT ${subject.toUpperCase()}S (lexically similar):\n` +
       suspicious
         .map((s, i) => `${i + 1}. Title: "${s.title}"\n   Pitch: "${s.pitch}"`)
         .join("\n") +
-      `\n\nAre any of these the SAME idea — same proposal or claim, not just the same topic? ` +
+      `\n\nAre any of these the SAME ${subject} — same proposal, claim, or topic focus, not just the same broad domain? ` +
       `Respond in JSON only:\n{"duplicate": true/false, "reason": "one sentence", "matchIndex": 0-based index or null}`;
 
     const res = await callGroq(
@@ -142,4 +136,65 @@ export async function checkIdeaNovelty(
       reason: "verdict-unavailable",
     };
   }
+}
+
+export async function checkIdeaNovelty(
+  title: string,
+  pitch: string,
+  opts: { llmVerdict?: boolean } = {}
+): Promise<NoveltyCheck> {
+  const cutoff = new Date();
+  cutoff.setUTCDate(cutoff.getUTCDate() - NOVELTY_WINDOW_DAYS);
+
+  const recent = await db
+    .select({ id: ideas.id, title: ideas.title, pitch: ideas.context })
+    .from(ideas)
+    .where(
+      and(
+        eq(ideas.roomId, AI_LAB_ROOM_ID),
+        eq(ideas.status, "published"),
+        gte(ideas.createdAt, cutoff)
+      )
+    )
+    .orderBy(desc(ideas.createdAt))
+    .limit(60);
+
+  return runNoveltyCheck(
+    title,
+    pitch,
+    recent.map((r) => ({
+      id: String(r.id),
+      title: String(r.title ?? ""),
+      pitch: String(r.pitch ?? ""),
+    })),
+    opts
+  );
+}
+
+export async function checkThemeNovelty(
+  theme: string,
+  opts: { llmVerdict?: boolean } = {}
+): Promise<NoveltyCheck> {
+  const today = new Date().toISOString().slice(0, 10);
+  const cutoff = new Date();
+  cutoff.setUTCDate(cutoff.getUTCDate() - NOVELTY_WINDOW_DAYS);
+  const cutoffDate = cutoff.toISOString().slice(0, 10);
+
+  const recent = await db
+    .select({ date: aiThemes.date, theme: aiThemes.theme, rationale: aiThemes.rationale })
+    .from(aiThemes)
+    .where(and(gte(aiThemes.date, cutoffDate), lt(aiThemes.date, today)))
+    .orderBy(desc(aiThemes.date))
+    .limit(20);
+
+  return runNoveltyCheck(
+    theme,
+    "",
+    recent.map((r) => ({
+      id: String(r.date),
+      title: String(r.theme ?? ""),
+      pitch: String(r.rationale ?? ""),
+    })),
+    { ...opts, lexicalTrigger: THEME_LEXICAL_TRIGGER, subject: "theme" }
+  );
 }

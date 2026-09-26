@@ -59,8 +59,8 @@ vi.mock("@/lib/agents/scheduler", () => ({
   queueDebateReply: vi.fn().mockResolvedValue(undefined),
 }));
 
-import { jaccardSimilarity, checkIdeaNovelty, LEXICAL_TRIGGER } from "@/lib/agents/novelty";
-import { writePostIdea } from "@/lib/agents/handlers/writers";
+import { jaccardSimilarity, checkIdeaNovelty, checkThemeNovelty, LEXICAL_TRIGGER, THEME_LEXICAL_TRIGGER } from "@/lib/agents/novelty";
+import { writePostIdea, writeThemeSelect } from "@/lib/agents/handlers/writers";
 import type { AIQueue } from "@/db/schema";
 
 function makeItem(overrides: Partial<AIQueue> = {}): AIQueue {
@@ -191,7 +191,121 @@ describe("checkIdeaNovelty", () => {
   });
 });
 
+describe("checkThemeNovelty", () => {
+  beforeEach(() => {
+    capturedInserts.length = 0;
+    vi.clearAllMocks();
+  });
+
+  it("is novel with an empty theme corpus and makes no LLM call", async () => {
+    mockDbSelect.mockReturnValue(selectChain([]));
+    const out = await checkThemeNovelty("Ocean cleanup drone swarms");
+    expect(out.novel).toBe(true);
+    expect(mockCallGroq).not.toHaveBeenCalled();
+  });
+
+  it("does not call the verdict for a lexically distant theme", async () => {
+    mockDbSelect.mockReturnValue(selectChain([
+      { date: "2026-09-24", theme: "AI policy safety ethics", rationale: "Regulation" },
+    ]));
+    const out = await checkThemeNovelty("Ocean cleanup drone swarms");
+    expect(out.novel).toBe(true);
+    expect(out.maxSimilarity).toBeLessThan(THEME_LEXICAL_TRIGGER);
+    expect(mockCallGroq).not.toHaveBeenCalled();
+  });
+
+  it("defers to the verdict and rejects a substantive theme repeat", async () => {
+    mockDbSelect.mockReturnValue(selectChain([
+      { date: "2026-09-24", theme: "Ocean cleanup drone swarms", rationale: "Autonomous collectors" },
+    ]));
+    mockCallGroq.mockResolvedValueOnce({
+      text: JSON.stringify({ duplicate: true, reason: "same topic", matchIndex: 0 }),
+      totalTokens: 10,
+    });
+    const out = await checkThemeNovelty("Ocean cleanup drone swarms");
+    expect(out.novel).toBe(false);
+    expect(out.closestId).toBe("2026-09-24");
+    expect(out.reason).toBe("same topic");
+  });
+
+  it("lexical-only mode rejects an identical theme without an LLM call", async () => {
+    mockDbSelect.mockReturnValue(selectChain([
+      { date: "2026-09-24", theme: "Ocean cleanup drone swarms", rationale: "Autonomous collectors" },
+    ]));
+    const out = await checkThemeNovelty("Ocean cleanup drone swarms", { llmVerdict: false });
+    expect(out.novel).toBe(false);
+    expect(mockCallGroq).not.toHaveBeenCalled();
+  });
+});
+
 // ─── writePostIdea gate ─────────────────────────────────────────────
+
+describe("writeThemeSelect novelty gate", () => {
+  beforeEach(() => {
+    capturedInserts.length = 0;
+    vi.clearAllMocks();
+  });
+
+  it("writes a novel theme without a resample", async () => {
+    mockDbSelect.mockReturnValue(selectChain([]));
+    await writeThemeSelect(
+      "ai_theme_setter",
+      makeItem({ agentId: "ai_theme_setter", actionType: "theme_select" }),
+      JSON.stringify({ theme: "Ocean cleanup drone swarms", rationale: "Fresh", suggested_angles: [] }),
+      "BASE PROMPT"
+    );
+    expect(capturedInserts.some((r) => r.data.theme === "Ocean cleanup drone swarms")).toBe(true);
+    expect(mockCallAgent).not.toHaveBeenCalled();
+  });
+
+  it("resamples once and writes a fresh theme when the first is repeated", async () => {
+    const duplicate = [{ date: "2026-09-24", theme: "Ocean cleanup drone swarms", rationale: "Collectors" }];
+    mockDbSelect
+      .mockReturnValueOnce(selectChain(duplicate))
+      .mockReturnValueOnce(selectChain([]));
+    mockCallGroq.mockResolvedValueOnce({
+      text: JSON.stringify({ duplicate: true, reason: "same topic", matchIndex: 0 }),
+      totalTokens: 10,
+    });
+    mockCallAgent.mockResolvedValueOnce(
+      JSON.stringify({ theme: "Community repair cooperatives", rationale: "Different", suggested_angles: [] })
+    );
+
+    await writeThemeSelect(
+      "ai_theme_setter",
+      makeItem({ agentId: "ai_theme_setter", actionType: "theme_select" }),
+      JSON.stringify({ theme: "Ocean cleanup drone swarms", rationale: "Collectors", suggested_angles: [] }),
+      "BASE PROMPT"
+    );
+
+    expect(mockCallAgent).toHaveBeenCalledOnce();
+    expect(capturedInserts.some((r) => r.data.theme === "Community repair cooperatives")).toBe(true);
+    expect(capturedInserts.some((r) => r.data.targetType === "theme_repeat")).toBe(false);
+  });
+
+  it("accepts an unavoidable repeat with an audit row", async () => {
+    const duplicate = [{ date: "2026-09-24", theme: "Ocean cleanup drone swarms", rationale: "Collectors" }];
+    mockDbSelect.mockReturnValue(selectChain(duplicate));
+    mockCallGroq.mockResolvedValueOnce({
+      text: JSON.stringify({ duplicate: true, reason: "same topic", matchIndex: 0 }),
+      totalTokens: 10,
+    });
+    mockCallAgent.mockResolvedValueOnce(
+      JSON.stringify({ theme: "Ocean cleanup drone swarms", rationale: "Collectors again", suggested_angles: [] })
+    );
+
+    await writeThemeSelect(
+      "ai_theme_setter",
+      makeItem({ agentId: "ai_theme_setter", actionType: "theme_select" }),
+      JSON.stringify({ theme: "Ocean cleanup drone swarms", rationale: "Collectors", suggested_angles: [] }),
+      "BASE PROMPT"
+    );
+
+    const audit = capturedInserts.find((r) => r.data.targetType === "theme_repeat");
+    expect(audit?.data.verdict).toBe("accepted");
+    expect(audit?.data.moderatorAgentId).toBe("system");
+  });
+});
 
 describe("writePostIdea novelty gate", () => {
   beforeEach(() => {

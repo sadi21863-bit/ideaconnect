@@ -98,6 +98,7 @@ Pass 1: per-idea summary + verbatim quotes (small/fast model). Pass 2: synthesis
 - **Debate quality:** Turn B opens with strongest counterargument sentence.
 - **Debate selection:** distinct participants primary, total comments tiebreak.
 - **Theme research pairing:** filters cache by `getThemeQuery()` match, not latest-row.
+- **Theme/idea novelty:** dated 14-day context plus lexical + LLM verdict gates; repeats resample once and fail open with an audit row.
 - **Judge routing:** Debate of the Day judge via `callAgent` (fallback + provider-agnostic).
 - **Archive search:** `/ai-lab/archive?q=...` searches published daily/weekly/monthly text, preserves the selected tab, resets page, and noindexes query pages.
 
@@ -174,7 +175,7 @@ npm run dev                   # http://localhost:3099
 ## Testing
 
 ```bash
-npm test                              # 326 tests / 26 files (Vitest)
+npm test                              # 336 tests / 26 files (Vitest)
 npx tsc --noEmit                      # 0 errors
 npx tsx scripts/check-agents.ts       # 9/9 across groq+openrouter
 ```

@@ -456,23 +456,18 @@ describe("processQueue — FOR UPDATE SKIP LOCKED pattern", () => {
     const firstItems  = firstBatch.map((r) => makeQueueItem({ id: r.id }));
     const secondItems = secondBatch.map((r) => makeQueueItem({ id: r.id }));
 
+    const chainFor = (rows: unknown[]) => {
+      const chain = Promise.resolve(rows) as Promise<unknown[]> & Record<string, unknown>;
+      chain.where = () => chainFor(rows);
+      chain.orderBy = () => chainFor(rows);
+      chain.limit = () => chainFor(rows);
+      return chain;
+    };
+
     mockDbSelect.mockImplementation(() => {
       const idx = selIdx++;
-      return {
-        from: (_t: unknown) => ({
-          where: (_c: unknown) => {
-            // Calls 0..10 belong to first processQueue:
-            //   0=item fetch, 1..10=usage+quota checks (2 per item)
-            // Calls 11..21 belong to second processQueue:
-            //   11=item fetch, 12..21=usage+quota checks
-            if (idx === 0)   return Promise.resolve(firstItems);
-            if (idx < 11)    return Promise.resolve([]);  // usage+quota for first batch
-            if (idx === 11)  return Promise.resolve(secondItems);
-            return Promise.resolve([]);                  // usage+quota for second batch
-          },
-          limit: () => Promise.resolve([]),
-        }),
-      };
+      const rows = idx === 0 ? firstItems : idx === 16 ? secondItems : [];
+      return { from: (_t: unknown) => chainFor(rows) };
     });
     selIdx = 0;
 

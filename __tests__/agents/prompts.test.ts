@@ -42,6 +42,22 @@ describe("buildPrompt — theme_select", () => {
     expect(prompt).toContain("avoid repeating");
   });
 
+  it("renders dated recent themes and a hard no-repeat rule", () => {
+    const item = makeItem({
+      actionType: "theme_select",
+      promptContext: {
+        recentThemes: ["AI safety", "Quantum compute"],
+        recentThemesWithDates: [
+          { date: "2026-09-24", theme: "AI safety" },
+          { date: "2026-09-23", theme: "Quantum compute" },
+        ],
+      },
+    });
+    const prompt = buildPrompt(item);
+    expect(prompt).toContain("2026-09-24: AI safety");
+    expect(prompt).toContain("MUST NOT");
+  });
+
   it("handles empty recentThemes gracefully", () => {
     const item = makeItem({ actionType: "theme_select", promptContext: { recentThemes: [] } });
     const prompt = buildPrompt(item);
