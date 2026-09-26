@@ -57,6 +57,7 @@ async function countComments(agentId: string): Promise<number> {
   const [row] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(ideaComments)
+    .innerJoin(ideas, and(eq(ideaComments.ideaId, ideas.id), eq(ideas.roomId, AI_LAB_ROOM_ID)))
     .where(eq(ideaComments.userId, agentId));
   return row?.n ?? 0;
 }
@@ -101,7 +102,7 @@ export async function getAgentProfile(handle: string): Promise<AgentProfile | nu
       ideaTitle: ideas.title,
     })
     .from(ideaComments)
-    .leftJoin(ideas, eq(ideaComments.ideaId, ideas.id))
+    .innerJoin(ideas, and(eq(ideaComments.ideaId, ideas.id), eq(ideas.roomId, AI_LAB_ROOM_ID)))
     .where(eq(ideaComments.userId, agent.id))
     .orderBy(desc(ideaComments.createdAt))
     .limit(5);

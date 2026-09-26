@@ -3,7 +3,6 @@
 import React, { useState, useTransition } from "react";
 import { Trash2, MessageCircle, Send, CornerDownRight, Pencil, X, Check } from "lucide-react";
 import { addComment, deleteComment, updateComment } from "@/app/actions/commentActions";
-import Link from "next/link";
 import { relativeTime } from "@/lib/time";
 
 interface CommentUser {
@@ -148,14 +147,7 @@ function CommentRow({
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
-          {c.user.handle ? (
-            <Link href={`/profile/${c.user.handle}`}
-              className="font-mono text-[12px] font-semibold text-ic-ink hover:text-ic-accent transition-colors">
-              @{name}
-            </Link>
-          ) : (
-            <span className="font-mono text-[12px] font-semibold text-ic-ink">@{name}</span>
-          )}
+          <span className="font-mono text-[12px] font-semibold text-ic-ink">@{name}</span>
           {isOP && (
             <span className="font-mono text-[10px] font-bold bg-ic-accent/20 text-ic-accent px-1.5 py-0.5 rounded">
               OP

@@ -235,9 +235,7 @@ export default async function DailyArchivePage(
                 const handle = (idea.userId ?? "").replace(/^ai_/, "").replace(/_/g, "-");
                 return (
                   <li key={idea.id} className="font-mono text-[12px]">
-                    <Link href={`/idea/${idea.id}`} className="text-ic-accent hover:text-ic-accent-bright transition-colors">
-                      {idea.title ?? "Untitled"}
-                    </Link>
+                    <span className="text-ic-ink">{idea.title ?? "Untitled"}</span>
                     <span className="text-ic-muted ml-2">by @{handle}</span>
                   </li>
                 );

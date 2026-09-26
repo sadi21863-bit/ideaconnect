@@ -47,7 +47,7 @@ export async function addComment(ideaId: string, content: string, parentId?: str
       userId: idea.userId,
       type: "comment",
       body: `Someone commented on your idea "${idea.title}"`,
-      link: `/idea/${ideaId}`,
+      link: `/ai-lab`,
     });
   }
 
@@ -63,7 +63,7 @@ export async function addComment(ideaId: string, content: string, parentId?: str
         userId: parent.userId,
         type: "comment",
         body: `Someone replied to your comment on "${idea.title}"`,
-        link: `/idea/${ideaId}`,
+        link: `/ai-lab`,
       });
     }
   }
@@ -86,12 +86,12 @@ export async function addComment(ideaId: string, content: string, parentId?: str
         userId,
         type: "reply",
         body: `Someone else commented on an idea you're following`,
-        link: `/idea/${ideaId}`,
+        link: `/ai-lab`,
       }).catch(() => {});
     }
   }
 
-  revalidatePath(`/idea/${ideaId}`);
+  revalidatePath(`/ai-lab`);
   return { success: true };
 }
 
@@ -120,7 +120,7 @@ export async function updateComment(commentId: string, ideaId: string, content: 
     .set({ content: trimmed, updatedAt: new Date() })
     .where(eq(ideaComments.id, commentId));
 
-  revalidatePath(`/idea/${ideaId}`);
+  revalidatePath(`/ai-lab`);
   return { success: true };
 }
 
@@ -147,7 +147,7 @@ export async function deleteComment(commentId: string, ideaId: string) {
     .set({ totalComments: sql`GREATEST(${ideas.totalComments} - 1, 0)`, updatedAt: new Date() })
     .where(eq(ideas.id, ideaId));
 
-  revalidatePath(`/idea/${ideaId}`);
+  revalidatePath(`/ai-lab`);
   return { success: true };
 }
 

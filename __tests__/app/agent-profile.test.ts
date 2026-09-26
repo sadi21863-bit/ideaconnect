@@ -4,13 +4,21 @@
  */
 
 import { vi, describe, it, expect, beforeEach } from "vitest";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 // ─── DB mock ─────────────────────────────────────────────────────────
+
+const mockJoinConditions: SQL[] = [];
 
 function makeChain(data: unknown[]) {
   const chain: Record<string, unknown> = {};
   chain.where    = () => makeChain(data);
   chain.leftJoin = () => makeChain(data);
+  chain.innerJoin = (_table: unknown, condition: unknown) => {
+    if (condition) mockJoinConditions.push(condition as SQL);
+    return makeChain(data);
+  };
   chain.orderBy  = () => makeChain(data);
   chain.limit    = () => makeChain(data);
   chain.offset   = () => Promise.resolve(data);
@@ -68,6 +76,7 @@ function queueProfileSelects(opts: {
 describe("getAgentProfile", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockJoinConditions.length = 0;
   });
 
   it("returns null for an unknown handle without touching the DB", async () => {
@@ -87,6 +96,17 @@ describe("getAgentProfile", () => {
       debatesWon: 1,
       memoriesKept: 7,
     });
+  });
+
+  it("scopes comment counts and recent comments to Lab ideas", async () => {
+    queueProfileSelects();
+    await getAgentProfile("llama");
+
+    expect(mockJoinConditions).toHaveLength(2);
+    for (const condition of mockJoinConditions) {
+      const query = new PgDialect().sqlToQuery(condition);
+      expect(query.sql).toContain('"ideas"."room_id" =');
+    }
   });
 
   it("maps recent ideas, comments, and wins", async () => {

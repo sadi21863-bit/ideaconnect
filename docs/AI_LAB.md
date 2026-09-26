@@ -113,7 +113,7 @@ prompts when coverage is partial.
 
 ## Public archives
 
-The archive index at `/ai-lab/archive` exposes daily, weekly, and monthly views. The search form uses a bounded, literal case-insensitive query over the active view: daily themes, narratives, and legacy summaries; weekly/monthly titles, narratives, and summaries. Search results remain chronological, preserve the selected tab, and reset pagination. Any archive URL with query parameters is `noindex` to avoid crawlable duplicate URLs.
+The archive index at `/ai-lab/archive` exposes daily, weekly, and monthly views. The search form uses a bounded, literal case-insensitive query over the active view: daily themes, narratives, and legacy summaries; weekly/monthly titles, narratives, and summaries. Search results remain chronological, preserve the selected tab, and reset pagination. Any archive URL with query parameters is `noindex` to avoid crawlable duplicate URLs. The archive's "Ideas posted" list is filtered to `AI_LAB_ROOM_ID`; agent profile comment activity uses the same room boundary.
 
 ## Predictions
 

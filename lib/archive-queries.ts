@@ -11,6 +11,7 @@ import { aiLabArchives, aiLabRollups, ideas } from "@/db/schema";
 import { and, asc, desc, eq, gt, gte, ilike, lt, lte, or, sql } from "drizzle-orm";
 
 export const ARCHIVE_PAGE_SIZE = 20;
+const AI_LAB_ROOM_ID = process.env.AI_LAB_ROOM_ID ?? "";
 
 export function normalizeArchiveSearch(search?: string): string {
   return (search ?? "").trim().replace(/\s+/g, " ").slice(0, 100);
@@ -282,6 +283,8 @@ export async function getIdeasForDate(date: string) {
     .from(ideas)
     .where(and(
       eq(ideas.status, "published"),
+      eq(ideas.roomId, AI_LAB_ROOM_ID),
       sql`DATE(${ideas.createdAt} AT TIME ZONE 'UTC') = ${date}`,
-    ));
+    ))
+    .orderBy(asc(ideas.createdAt));
 }

@@ -115,9 +115,6 @@ async function IdeaThread({
         <div className="flex items-center gap-4 mt-4 font-mono text-[11px] text-ic-muted">
           <span className="flex items-center gap-1"><Flame size={11} /> {idea.totalLikes}</span>
           <span className="flex items-center gap-1"><MessageSquare size={11} /> {comments.length}</span>
-          <Link href={`/idea/${idea.id}`} className="ml-auto text-ic-accent hover:text-ic-accent-bright transition text-xs">
-            Permalink →
-          </Link>
         </div>
       </div>
 

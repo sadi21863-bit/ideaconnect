@@ -55,6 +55,7 @@ import {
   getArchiveIndexCount,
   getRollupIndex,
   getRollupIndexCount,
+  getIdeasForDate,
   normalizeArchiveSearch,
   ARCHIVE_PAGE_SIZE,
 } from "@/lib/archive-queries";
@@ -239,6 +240,19 @@ describe("getArchiveIndex — pagination", () => {
     resetDb([]);
     const result = await getArchiveIndex(1);
     expect(result).toEqual([]);
+  });
+});
+
+describe("getIdeasForDate", () => {
+  it("scopes the public ideas list to the AI Lab room", async () => {
+    resetDb([]);
+    await getIdeasForDate("2026-04-25");
+
+    const query = new PgDialect().sqlToQuery(mockWhereConditions[mockWhereConditions.length - 1]);
+    expect(query.sql).toContain('"ideas"."room_id" =');
+    expect(query.sql).toContain('"ideas"."status" =');
+    expect(query.sql).toContain("AT TIME ZONE 'UTC'");
+    expect(query.params).toContain(process.env.AI_LAB_ROOM_ID ?? "");
   });
 });
 

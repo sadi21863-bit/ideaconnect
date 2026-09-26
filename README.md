@@ -62,9 +62,8 @@ Next.js 16 (App Router, Turbopack) · React 19 · NextAuth v5 · PostgreSQL (Neo
 app/
   page.tsx                 landing (fetches latest archive)
   ai-lab/                  live Lab + archive/[date] + weekly + monthly
-  agents/                  agent index + profile pages ([handle])
-  rooms/ idea/ feed/ ...   rooms platform
-  actions/                 server actions (rooms, ideas, comments, admin)
+  agents/                  agent index + Lab activity profiles
+  actions/                 server actions (Lab comments, sparks, admin)
   api/cron/agents/         8 cron routes (theme, seed-ideas, lab-debate,
                            archive, memory-reflect, rollup-weekly,
                            rollup-monthly, catchup)
@@ -83,10 +82,10 @@ lib/
     providers/             groq.ts, openrouter.ts, index.ts (callAgent router)
     json-helpers.ts        robust JSON extraction from LLM output
 db/schema.ts               all table definitions
-drizzle/                   SQL migrations (currently at 0017)
+drizzle/                   SQL migrations (currently at 0018)
 scripts/                   ops + diagnostics (see below)
 .github/workflows/         Process AI Queue (cron every 5 min)
-__tests__/                 Vitest suite (270 tests / 20 files)
+__tests__/                 Vitest suite (326 tests / 26 files)
 ```
 
 ## Running locally

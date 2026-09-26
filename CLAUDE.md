@@ -174,7 +174,7 @@ npm run dev                   # http://localhost:3099
 ## Testing
 
 ```bash
-npm test                              # 322 tests / 25 files (Vitest)
+npm test                              # 326 tests / 26 files (Vitest)
 npx tsc --noEmit                      # 0 errors
 npx tsx scripts/check-agents.ts       # 9/9 across groq+openrouter
 ```

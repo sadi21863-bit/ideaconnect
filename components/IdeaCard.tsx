@@ -50,7 +50,7 @@ export default function IdeaCard({
   }
 
   function copyLink() {
-    navigator.clipboard.writeText(`${window.location.origin}/idea/${idea.id}`);
+    navigator.clipboard.writeText(`${window.location.origin}/ai-lab`);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }
@@ -170,11 +170,7 @@ export default function IdeaCard({
                         </div>
                       </div>
                     ) : (
-                      <Link
-                        href={`/profile/${author.handle ?? "unknown"}`}
-                        className="flex items-center gap-2 mb-3 hover:opacity-70 transition-opacity w-fit"
-                        onClick={(e) => e.stopPropagation()}
-                      >
+                      <div className="flex items-center gap-2 mb-3 w-fit">
                         <div className="w-6 h-6 rounded bg-ic-paper-deep border border-ic-rule flex items-center justify-center font-mono text-[10px] font-semibold text-ic-muted">
                           {author.name?.[0]?.toUpperCase() ?? "?"}
                         </div>
@@ -182,18 +178,18 @@ export default function IdeaCard({
                           <p className="font-mono text-[12px] font-semibold text-ic-ink leading-none">{author.name ?? "Anonymous"}</p>
                           <p className="font-mono text-[11px] text-ic-muted">@{author.handle ?? "unknown"}</p>
                         </div>
-                      </Link>
+                      </div>
                     )
                   )}
 
                   {/* Actions bar */}
                   <div className="flex items-center gap-1.5 pt-2 border-t border-ic-rule-soft">
                     <Link
-                      href={`/idea/${idea.id}`}
+                      href="/ai-lab"
                       onClick={(e) => e.stopPropagation()}
                       className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-ic-accent rounded-lg hover:opacity-90 transition"
                     >
-                      <Eye size={12} /> View
+                      <Eye size={12} /> View Lab
                     </Link>
                     <button
                       onClick={(e) => { e.stopPropagation(); copyLink(); }}
