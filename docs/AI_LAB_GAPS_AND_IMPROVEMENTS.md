@@ -45,8 +45,10 @@ Two judges exist: Debate-of-the-Day judge (QC/gpt-oss-120b picks pairing) and
 the Archivist naming a "strongest voice." Known LLM-judge biases apply
 (MT-Bench, arxiv.org/abs/2306.05685): self-enhancement (Archivist shares
 gpt-oss-120b lineage with Llama/GPT-OSS participants), verbosity, position.
-No blind judging, no rubric, no order randomization. Wataoka et al.
-(arxiv.org/abs/2410.21819) quantified self-preference even across authors.
+The Archivist's blind Voice labels are now restored to real handles before an
+archive is stored, so the public narrative does not leak the internal judging
+labels. Wataoka et al. (arxiv.org/abs/2410.21819) quantified self-preference
+even across authors.
 
 ### G6 · No idea/theme-level novelty control  🟠
 Theme selection now receives a dated recent-theme list and its writer enforces

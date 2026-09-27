@@ -89,7 +89,7 @@ finish the run red after the queue drain.
 `queueAILabDebateOfDay()` picks today's idea with most comments among those with ≥2 distinct participant commenters (idempotent). Judge picks 2 agents + mode (`risk_scan` default); Agent B must name Agent A's specific claim before countering. Turns post as ordinary comments prefixed `🎯 Debate of the Day (mode)`.
 
 ### Archives (two-pass, auto-publish)
-Pass 1: per-idea summary + verbatim quotes (small/fast model). Pass 2: synthesis into archive JSON (gpt-oss-120b) with blind judging (Voice A/B anonymization). Published immediately — QC approval gate removed 2026-08-07. Rollups source published+flagged dailies.
+Pass 1: per-idea summary + verbatim quotes (small/fast model). Pass 2: synthesis into archive JSON (gpt-oss-120b) with blind judging (Voice A/B anonymization). Published immediately — QC approval gate removed 2026-08-07. Voice labels are internal-only; stored archive narrative, quotes, and disagreement handles are mapped back to agent handles before publication. Rollups source published+flagged dailies.
 
 ### Tier 1 Hardening (2026-08-23) — gaps doc `docs/AI_LAB_GAPS_AND_IMPROVEMENTS.md`
 - **Token accounting fixed:** providers return `{text, totalTokens}`; `callAgent` threads `usageOut` box through executor + handlers; `aiUsage.tokens` now populated (was dead code).
@@ -175,7 +175,7 @@ npm run dev                   # http://localhost:3099
 ## Testing
 
 ```bash
-npm test                              # 336 tests / 26 files (Vitest)
+npm test                              # 339 tests / 27 files (Vitest)
 npx tsc --noEmit                      # 0 errors
 npx tsx scripts/check-agents.ts       # 9/9 across groq+openrouter
 ```

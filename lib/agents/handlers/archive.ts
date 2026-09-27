@@ -17,6 +17,7 @@ import { parseJsonResponse } from "../json-helpers";
 import { fetchResearch, formatResearchBlock, type SourceCitation } from "../research";
 import type { AIQueue } from "@/db/schema";
 import { AI_LAB_ROOM_ID } from "./shared";
+import { restoreVoiceLabels } from "../voice-labels";
 
 interface ArchivistOutput {
   theme:             string;
@@ -189,8 +190,8 @@ Write the full archive narrative following your Archivist instructions.
 Use the quote candidates above for memorable_quotes — copy verbatim, do not paraphrase.
 IMPORTANT — anonymized judging: participant names have been replaced with labels
 (Voice A, Voice B, …). Judge ONLY the argument quality in the text; if any real
-name leaked through, ignore it for scoring. In memorable_quotes, keep quotes
-verbatim but replace any leaked name with its Voice label.
+name leaked through, ignore it for scoring. Use the Voice labels consistently
+in the JSON; the publishing layer restores the real handles before storage.
 Include a "strongest_voice" field set to exactly one of these labels:
 ${[...voiceToHandle.keys()].join(", ")}.
 Pick the single voice whose argument was most incisive, original, or
@@ -218,14 +219,33 @@ Output ONLY the JSON object.`;
   const narrativeArc = stripThinkingTags(String(parsed.narrative_arc ?? "")).trim();
   if (!narrativeArc) throw new Error("Empty narrative_arc after cleanup");
 
+  const publishedNarrative = restoreVoiceLabels(narrativeArc, voiceToHandle);
+  const publishedDisagreements = restoreVoiceLabels(
+    (parsed.key_disagreements ?? []) as unknown as Record<string, unknown>[],
+    voiceToHandle
+  );
+  const publishedQuotes = restoreVoiceLabels(
+    (parsed.memorable_quotes ?? []) as unknown as Record<string, unknown>[],
+    voiceToHandle
+  );
+  const publishedQuestions = restoreVoiceLabels(parsed.key_questions ?? [], voiceToHandle);
+  const publishedStats = restoreVoiceLabels(
+    (parsed.stats ?? {}) as unknown as Record<string, unknown>,
+    voiceToHandle
+  );
+
   // De-anonymize strongest_voice label → users.id. Accept legacy handle form too.
   let winnerAgentId: string | null = null;
   const strongestRaw = String((parsed as unknown as Record<string, unknown>).strongest_voice
     ?? (parsed as unknown as Record<string, unknown>).strongest_voice_agent_handle ?? "").trim();
   if (strongestRaw) {
     const lower = strongestRaw.toLowerCase();
+    const withoutAt = strongestRaw.replace(/^@/, "");
     const resolvedHandle =
-      voiceToHandle.get(strongestRaw) ?? voiceToHandle.get(lower) ?? lower.replace(/^@/, "");
+      voiceToHandle.get(strongestRaw)
+      ?? voiceToHandle.get(withoutAt)
+      ?? voiceToHandle.get(lower)
+      ?? lower.replace(/^@/, "");
     if (resolvedHandle) {
       const [winnerRow] = await db
         .select({ id: users.id })
@@ -246,12 +266,12 @@ Output ONLY the JSON object.`;
     .values({
       date,
       theme:            String(parsed.theme ?? themeStr),
-      summaryMarkdown:  narrativeArc,   // backward compat — same content as narrative_arc
-      narrativeArc,
-      keyDisagreements: (parsed.key_disagreements ?? []) as unknown as Record<string, unknown>[],
-      keyQuestions:     (parsed.key_questions     ?? []) as unknown as string[],
-      memorableQuotes:  (parsed.memorable_quotes  ?? []) as unknown as Record<string, unknown>[],
-      stats:            (parsed.stats             ?? {}) as unknown as Record<string, unknown>,
+      summaryMarkdown:  publishedNarrative,
+      narrativeArc:     publishedNarrative,
+      keyDisagreements: publishedDisagreements,
+      keyQuestions:     publishedQuestions,
+      memorableQuotes:  publishedQuotes,
+      stats:            publishedStats,
       status:           "published",
       publishedAt:      now,
       generatedAt:      now,
@@ -261,12 +281,12 @@ Output ONLY the JSON object.`;
       target: aiLabArchives.date,
       set: {
         theme:           String(parsed.theme ?? themeStr),
-        summaryMarkdown: narrativeArc,
-        narrativeArc,
-        keyDisagreements: (parsed.key_disagreements ?? []) as unknown as Record<string, unknown>[],
-        keyQuestions:    (parsed.key_questions     ?? []) as unknown as string[],
-        memorableQuotes: (parsed.memorable_quotes  ?? []) as unknown as Record<string, unknown>[],
-        stats:           (parsed.stats             ?? {}) as unknown as Record<string, unknown>[],
+        summaryMarkdown: publishedNarrative,
+        narrativeArc:    publishedNarrative,
+        keyDisagreements: publishedDisagreements,
+        keyQuestions:    publishedQuestions,
+        memorableQuotes: publishedQuotes,
+        stats:           publishedStats,
         status:          "published",
         publishedAt:     now,
         generatedAt:     now,
