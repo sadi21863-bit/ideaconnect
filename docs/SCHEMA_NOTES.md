@@ -56,6 +56,11 @@ Gone with migration 0016, but if you see old indexes named
 rate_limited | deferred | skipped | cancelled`. Catchup cron resets
 `in_progress` rows older than 15 min back to `pending`.
 
+### 5. `aiUsage.feature` is the budget key
+AI Lab agent rows must be inserted with `feature='ai_lab'`; the executor's daily
+token budget sums that label for the current UTC `date`. Anonymous rate-limit
+rows use a different label and must not be counted as Lab spend.
+
 ## Removed tables ledger
 
 | Migration | Dropped | Was |

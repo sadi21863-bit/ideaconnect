@@ -8,14 +8,13 @@ research (papers/docs cited inline)._
 
 ## Part 1 — Confirmed Gaps
 
-### G1 · Token-budget enforcement is dead code  🔴
-The executor's feature-level quota sums `aiUsage.tokens` against
-`DAILY_TPD_LIMIT` (executor.ts:178-191), but **no code path ever writes
-`tokens`** — `upsertUsage` (handlers/shared.ts:15) and both self-contained
-handlers insert only `requestCount`. The sum is always 0; the entire TPD
-budget (`lib/config.ts`) does nothing. Only per-agent requestCount limits work.
-Providers return usage data on every call (Groq `x_total_tokens`, OpenRouter
-`usage`) — it is currently discarded.
+### G1 · Token-budget enforcement is dead code  ✅ FIXED 2026-09-27
+The executor's feature-level quota sums `aiUsage.tokens` for rows labelled
+`feature='ai_lab'` on the current UTC `date` against `DAILY_TPD_LIMIT`. Every AI
+Lab usage writer now carries that label, including the generic executor path,
+archives/QC, debate, and rollups. Providers return usage data on every call
+(Groq `x_total_tokens`, OpenRouter `usage`) and the handlers thread it into
+`aiUsage.tokens`.
 
 ### G2 · Agents have no memory across days  🟠
 Every LLM call is one-shot with prompt-stuffed context limited to *today's*

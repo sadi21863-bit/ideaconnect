@@ -81,7 +81,7 @@ finish the run red after the queue drain.
 ### Executor mechanics
 - Claims pending rows with `FOR UPDATE SKIP LOCKED`; ordinary failures retry up to 3 attempts with bounded backoff; rate-limited items wait until the next UTC day; feature-budget items defer for 15 minutes and are requeued by catchup.
 - GitHub Actions passes `OPENROUTER_API_KEY` to both the connectivity probe and queue processor. The queue still runs when the probe fails, but the workflow finishes red so provider outages cannot hide behind a green run.
-- Feature quota: AI Lab budget fraction of daily TPD (`lib/config.ts`); over-budget items defer, not dead-letter.
+- Feature quota: AI Lab usage rows are labelled `feature='ai_lab'`; the executor sums that label for the current UTC `date` against the budget fraction of daily TPD. Over-budget items defer, not dead-letter.
 - Self-contained handlers bypass `buildPrompt`: `archive_day`, `quality_review_archive`, `rollup_week/month`, `conductor`, `themeresearch`, `ai_lab_debate`, `memory_reflect`.
 - Scheduler day windows (research cache and memory idempotency) use UTC midnight, not server-local midnight.
 - Everything else goes through `buildPrompt()` → `callAgent()` → writer switch.
@@ -177,7 +177,7 @@ npm run dev                   # http://localhost:3099
 ## Testing
 
 ```bash
-npm test                              # 342 tests / 28 files (Vitest)
+npm test                              # 344 tests / 29 files (Vitest)
 npx tsc --noEmit                      # 0 errors
 npx tsx scripts/check-agents.ts       # 9/9 across groq+openrouter
 ```

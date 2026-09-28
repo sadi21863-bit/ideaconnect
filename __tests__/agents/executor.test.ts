@@ -370,6 +370,7 @@ describe("processQueue — success path", () => {
     );
     expect(usageInsert).toBeDefined();
     expect((usageInsert!.data as Record<string, unknown>).requestCount).toBe(1);
+    expect((usageInsert!.data as Record<string, unknown>).feature).toBe("ai_lab");
   });
 
   it("returns correct processed/failed counts", async () => {

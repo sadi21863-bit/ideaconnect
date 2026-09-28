@@ -307,6 +307,7 @@ Output ONLY the JSON object.`;
       lastRequestAt: new Date(),
       lastProvider:  agent.provider,
       tokens:        usage.tokens,
+      feature:       "ai_lab",
     })
     .onConflictDoUpdate({
       target: [aiUsage.agentId, aiUsage.date],
@@ -316,6 +317,7 @@ Output ONLY the JSON object.`;
         lastRequestAt: new Date(),
         lastProvider:  agent.provider,
         tokens:        sql`${aiUsage.tokens} + ${usage.tokens}`,
+        feature:       "ai_lab",
       },
     });
 }
@@ -508,10 +510,10 @@ export async function executeQualityReviewArchive(
   // ── Increment usage ──────────────────────────────────────────────────
   await db
     .insert(aiUsage)
-    .values({ agentId: agent.id, date: today, requestCount: 1, lastRequestAt: now, lastProvider: agent.provider, tokens: qcUsage.tokens })
+    .values({ agentId: agent.id, date: today, requestCount: 1, lastRequestAt: now, lastProvider: agent.provider, tokens: qcUsage.tokens, feature: "ai_lab" })
     .onConflictDoUpdate({
       target: [aiUsage.agentId, aiUsage.date],
       targetWhere: sql`${aiUsage.agentId} IS NOT NULL AND ${aiUsage.date} IS NOT NULL`,
-      set: { requestCount: sql`${aiUsage.requestCount} + 1`, lastRequestAt: now, lastProvider: agent.provider, tokens: sql`${aiUsage.tokens} + ${qcUsage.tokens}` },
+      set: { requestCount: sql`${aiUsage.requestCount} + 1`, lastRequestAt: now, lastProvider: agent.provider, tokens: sql`${aiUsage.tokens} + ${qcUsage.tokens}`, feature: "ai_lab" },
     });
 }

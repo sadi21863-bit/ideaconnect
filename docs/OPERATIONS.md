@@ -85,10 +85,17 @@ FROM ai_queue
 WHERE status IN ('failed','failed_permanently')
   AND created_at > NOW() - INTERVAL '24 hours'
 GROUP BY 1,2 HAVING COUNT(*) > 1;
+
+-- daily AI Lab token budget (the executor sums feature='ai_lab')
+SELECT date, SUM(tokens) AS day_tokens, COUNT(*) AS agent_rows
+FROM ai_usage
+WHERE agent_id IS NOT NULL AND feature = 'ai_lab'
+  AND date >= CURRENT_DATE - 14
+GROUP BY date ORDER BY date DESC;
 ```
 
-CI doubles as the monitor: the GHA workflow **fails the run** if any agent
-probe fails (`check-agents.ts`, `continue-on-error: false`). A red run is the
+CI doubles as the monitor: the GHA workflow drains the queue even when the
+agent probe fails, then the final health gate fails the run. A red run is the
 fastest outage signal.
 
 ## Deploying schema changes
@@ -96,7 +103,7 @@ fastest outage signal.
 Write SQL in `drizzle/00XX_name.sql`, register it in
 `drizzle/meta/_journal.json` (next `idx`, unique `when` ms, matching `tag`),
 then execute statement-by-statement (split on `--> statement-breakpoint`).
-Applied through **0017**. Dropped-table ledger lives in `SCHEMA_NOTES.md`.
+Applied through **0018**. Dropped-table ledger lives in `SCHEMA_NOTES.md`.
 
 ## Model / provider change checklist
 

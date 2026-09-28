@@ -30,6 +30,7 @@ export async function upsertUsage(
         lastRequestAt: new Date(),
         lastProvider: provider,
         tokens: sql`${aiUsage.tokens} + ${tokens}`,
+        feature,
       },
     });
 }

@@ -64,9 +64,11 @@ export async function executeRollupWeek(
   // ── 3. Call Archivist — token budget from agent.maxTokens (4000 for GPT-OSS) ──
   // jsonMode: true (gpt-oss-120b verified) — the old GitHub gpt-4o path repeatedly
   // produced invalid JSON for weekly rollups; native JSON enforcement removes that.
+  const usage = { tokens: 0 };
   const rawResponse = await callAgent(agent as Parameters<typeof callAgent>[0], prompt, {
     temperature: 0.7,
     jsonMode:    true,
+    usageOut:    usage,
   });
 
   if (!rawResponse.trim()) throw new Error("Empty response from Archivist for weekly rollup");
@@ -122,11 +124,11 @@ export async function executeRollupWeek(
   // ── 5. Increment usage ───────────────────────────────────────────────
   await db
     .insert(aiUsage)
-    .values({ agentId: agent.id, date: today, requestCount: 1, lastRequestAt: now, lastProvider: agent.provider })
+    .values({ agentId: agent.id, date: today, requestCount: 1, lastRequestAt: now, lastProvider: agent.provider, tokens: usage.tokens, feature: "ai_lab" })
     .onConflictDoUpdate({
       target: [aiUsage.agentId, aiUsage.date],
       targetWhere: sql`${aiUsage.agentId} IS NOT NULL AND ${aiUsage.date} IS NOT NULL`,
-      set: { requestCount: sql`${aiUsage.requestCount} + 1`, lastRequestAt: now, lastProvider: agent.provider },
+      set: { requestCount: sql`${aiUsage.requestCount} + 1`, lastRequestAt: now, lastProvider: agent.provider, tokens: sql`${aiUsage.tokens} + ${usage.tokens}`, feature: "ai_lab" },
     });
 }
 
@@ -198,9 +200,11 @@ export async function executeRollupMonth(
 
   // ── 4. Call Archivist — token budget from agent.maxTokens (4000 for GPT-OSS) ──
   // jsonMode: true (gpt-oss-120b verified) — native JSON enforcement.
+  const usage = { tokens: 0 };
   const rawResponse = await callAgent(agent as Parameters<typeof callAgent>[0], prompt, {
     temperature: 0.7,
     jsonMode:    true,
+    usageOut:    usage,
   });
 
   if (!rawResponse.trim()) throw new Error("Empty response from Archivist for monthly rollup");
@@ -256,10 +260,10 @@ export async function executeRollupMonth(
   // ── 6. Increment usage ───────────────────────────────────────────────
   await db
     .insert(aiUsage)
-    .values({ agentId: agent.id, date: today, requestCount: 1, lastRequestAt: now, lastProvider: agent.provider })
+    .values({ agentId: agent.id, date: today, requestCount: 1, lastRequestAt: now, lastProvider: agent.provider, tokens: usage.tokens, feature: "ai_lab" })
     .onConflictDoUpdate({
       target: [aiUsage.agentId, aiUsage.date],
       targetWhere: sql`${aiUsage.agentId} IS NOT NULL AND ${aiUsage.date} IS NOT NULL`,
-      set: { requestCount: sql`${aiUsage.requestCount} + 1`, lastRequestAt: now, lastProvider: agent.provider },
+      set: { requestCount: sql`${aiUsage.requestCount} + 1`, lastRequestAt: now, lastProvider: agent.provider, tokens: sql`${aiUsage.tokens} + ${usage.tokens}`, feature: "ai_lab" },
     });
 }

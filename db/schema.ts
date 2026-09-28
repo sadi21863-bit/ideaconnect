@@ -261,7 +261,8 @@ export const aiQueue = pgTable("ai_queue", {
 
 // ─── AI USAGE (Phase 2) ──────────────────────────────────────────────
 // Dual-purpose table:
-//   Agent usage rows  — agentId set, ipAddress null, feature='agent_usage'
+//   Agent usage rows  — agentId set, ipAddress null, feature='ai_lab' for Lab
+//                       calls (or another feature label for non-Lab callers)
 //   Rate limit events — agentId null, ipAddress set, feature='quick_debate' etc.
 export const aiUsage = pgTable("ai_usage", {
   id:            uuid("id").defaultRandom().primaryKey(),

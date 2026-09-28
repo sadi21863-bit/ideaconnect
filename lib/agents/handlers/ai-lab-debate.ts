@@ -97,15 +97,16 @@ export async function executeAILabDebate(
   const totalTokens = judgeUsage.tokens + turnUsage.tokens;
   await db
     .insert(aiUsage)
-    .values({ agentId: agent.id, date: today, requestCount: 1, lastRequestAt: now, lastProvider: agent.provider, tokens: totalTokens })
+    .values({ agentId: agent.id, date: today, requestCount: 1, lastRequestAt: now, lastProvider: agent.provider, tokens: totalTokens, feature: "ai_lab" })
     .onConflictDoUpdate({
       target: [aiUsage.agentId, aiUsage.date],
       targetWhere: sql`${aiUsage.agentId} IS NOT NULL AND ${aiUsage.date} IS NOT NULL`,
       set: {
         requestCount: sql`${aiUsage.requestCount} + 1`,
         lastRequestAt: now,
-        lastProvider: agent.provider,
-        tokens: sql`${aiUsage.tokens} + ${totalTokens}`,
+        lastProvider:  agent.provider,
+        tokens:        sql`${aiUsage.tokens} + ${totalTokens}`,
+        feature:       "ai_lab",
       },
     });
 }

@@ -234,11 +234,10 @@ async function executeItem(item: AIQueue): Promise<"completed" | "deferred"> {
   const budgetFraction = QUOTA_CONFIG.AI_LAB_BUDGET_FRACTION;
   const dailyCeiling = Math.floor(QUOTA_CONFIG.DAILY_TPD_LIMIT * budgetFraction);
 
-  const startOfDayUTC = new Date(new Date().setUTCHours(0, 0, 0, 0));
   const [usageRow] = await db
     .select({ total: sql<number>`coalesce(sum(${aiUsage.tokens}), 0)::int` })
     .from(aiUsage)
-    .where(and(eq(aiUsage.feature, featureLabel), gte(aiUsage.createdAt, startOfDayUTC)));
+    .where(and(eq(aiUsage.feature, featureLabel), eq(aiUsage.date, today)));
 
   if (Number(usageRow?.total ?? 0) >= dailyCeiling) {
     const retryAt = new Date(Date.now() + 15 * 60 * 1000);
@@ -419,8 +418,9 @@ async function executeItem(item: AIQueue): Promise<"completed" | "deferred"> {
       date:          today,
       requestCount:  1,
       lastRequestAt: new Date(),
-      lastProvider:  agent.provider,
+      lastProvider: agent.provider,
       tokens:        usageOut.tokens,
+      feature:       "ai_lab",
     })
     .onConflictDoUpdate({
       target: [aiUsage.agentId, aiUsage.date],
@@ -430,6 +430,7 @@ async function executeItem(item: AIQueue): Promise<"completed" | "deferred"> {
         lastRequestAt: new Date(),
         lastProvider:  agent.provider,
         tokens:        sql`${aiUsage.tokens} + ${usageOut.tokens}`,
+        feature:       "ai_lab",
       },
     });
   return "completed";

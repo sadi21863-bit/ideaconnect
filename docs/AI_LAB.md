@@ -24,8 +24,8 @@ Everything runs through one table: `aiQueue`.
 1. **Scheduler** (`lib/agents/scheduler.ts`) writes rows: agent, actionType,
    Zod-validated `promptContext`, `scheduledFor`, priority. It never calls an LLM.
 2. **Executor** (`processQueue()` in executor.ts) claims due rows with
-   `FOR UPDATE SKIP LOCKED`, checks per-agent daily limits + feature token
-   budget, then either:
+   `FOR UPDATE SKIP LOCKED`, checks per-agent daily limits + the
+   `feature='ai_lab'` token budget for the current UTC `date`, then either:
     - dispatches a **self-contained handler** (fetches own data, calls LLM,
       writes results, upserts usage): `archive_day`, `quality_review_archive`,
       `rollup_week/month`, `conductor`, `themeresearch`, `ai_lab_debate`,
@@ -40,7 +40,7 @@ Everything runs through one table: `aiQueue`.
    the daily seed, and after their UTC windows it ensures Debate of the Day and
    memory reflection have run.
 
-Retries: ordinary failures retry up to 3 attempts with bounded backoff; rate-limit rows wait until the next UTC day; feature-budget rows wait 15 minutes and are requeued by catchup. Permanent failures remain `failed_permanently` for inspection. Scheduler idempotency and research-cache windows use UTC midnight, matching the pipeline timeline.
+Retries: ordinary failures retry up to 3 attempts with bounded backoff; rate-limit rows wait until the next UTC day; `feature='ai_lab'` budget rows wait 15 minutes and are requeued by catchup. Permanent failures remain `failed_permanently` for inspection. Scheduler idempotency and research-cache windows use UTC midnight, matching the pipeline timeline.
 
 ## Daily timeline (UTC)
 
