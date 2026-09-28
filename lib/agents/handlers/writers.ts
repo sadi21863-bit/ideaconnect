@@ -11,7 +11,7 @@ import { stripThinkingTags } from "../response-cleaner";
 import { buildPrompt } from "../prompts";
 import { checkIdeaNovelty, checkThemeNovelty, LEXICAL_TRIGGER } from "../novelty";
 import type { AIQueue } from "@/db/schema";
-import { AI_LAB_ROOM_ID, MIN_CONTENT_LENGTH } from "./shared";
+import { AI_LAB_ROOM_ID, MIN_CONTENT_LENGTH, upsertUsage } from "./shared";
 
 export async function writeThemeSelect(
   agentId: string,
@@ -331,8 +331,8 @@ export async function writeQualityReview(
 // ─── Conductor writer ─────────────────────────────────────────────────
 //
 // Reads the full thread, asks the model to identify the sharpest unresolved
-// tension, and writes it as a question. No QC review, no debate reply cascade,
-// no usage upsert — the conductor asks a question, it doesn't make a claim.
+// tension, and writes it as a question. No QC review or debate reply cascade;
+// the LLM call still records usage for the AI Lab token budget.
 
 export async function writeConductorQuestion(agentId: string, item: AIQueue): Promise<void> {
   if (!item.targetIdeaId) throw new Error("conductor action missing targetIdeaId");
@@ -366,7 +366,19 @@ Identify the sharpest unresolved tension and pose it as one direct question. Fol
   const agent = getAgent(agentId);
   if (!agent) throw new Error(`Conductor agent not found: ${agentId}`);
 
-  const response = await callAgent(agent, userPrompt, { temperature: 0.5, maxTokens: 120 });
+  const usage = { tokens: 0 };
+  const response = await callAgent(agent, userPrompt, {
+    temperature: 0.5,
+    maxTokens: 120,
+    usageOut: usage,
+  });
+  await upsertUsage(
+    agentId,
+    new Date().toISOString().slice(0, 10),
+    agent.provider,
+    "ai_lab",
+    usage.tokens
+  );
   const cleaned  = response.trim();
 
   if (!cleaned || cleaned.toUpperCase() === "SKIP") {
