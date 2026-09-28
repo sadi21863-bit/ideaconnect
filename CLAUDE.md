@@ -83,6 +83,7 @@ finish the run red after the queue drain.
 - GitHub Actions passes `OPENROUTER_API_KEY` to both the connectivity probe and queue processor. The queue still runs when the probe fails, but the workflow finishes red so provider outages cannot hide behind a green run.
 - Feature quota: AI Lab budget fraction of daily TPD (`lib/config.ts`); over-budget items defer, not dead-letter.
 - Self-contained handlers bypass `buildPrompt`: `archive_day`, `quality_review_archive`, `rollup_week/month`, `conductor`, `themeresearch`, `ai_lab_debate`, `memory_reflect`.
+- Scheduler day windows (research cache and memory idempotency) use UTC midnight, not server-local midnight.
 - Everything else goes through `buildPrompt()` → `callAgent()` → writer switch.
 - Memory (M1): executor fetches top-5 relevant `agent_memories` per item and `buildPrompt` prepends them as a THINGS YOU REMEMBER block (empty when nothing overlaps).
 

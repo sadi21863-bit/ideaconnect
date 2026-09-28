@@ -122,7 +122,7 @@ function validateContext<T>(
  */
 export async function queueThemeResearch(date: string): Promise<void> {
   const query      = getThemeQuery();
-  const startOfDay = new Date(new Date().setHours(0, 0, 0, 0));
+  const startOfDay = new Date(new Date().setUTCHours(0, 0, 0, 0));
 
   const existing = await db
     .select({ id: searchCache.id })
@@ -716,7 +716,7 @@ export async function queueMemoryReflection(dateStr?: string): Promise<void> {
 
   const date = dateStr ?? new Date().toISOString().slice(0, 10);
 
-  const startOfDay = new Date(new Date().setHours(0, 0, 0, 0));
+  const startOfDay = new Date(new Date().setUTCHours(0, 0, 0, 0));
   const [existing] = await db
     .select({ id: aiQueue.id })
     .from(aiQueue)
