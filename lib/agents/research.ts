@@ -41,20 +41,32 @@ const BREAKING_NEWS_MINUTES  = 120; // articles < 2h old are excluded (not yet v
 const MAX_CITATIONS          = 5;
 const CACHE_TTL_HOURS        = 24;
 
-// ── Rotating 7-day query bank (Theme Setter) ──────────────────────────────────
+// ── Rotating 14-day query bank (Theme Setter) ───────────────────────────────
 
-export const THEME_QUERY_BANK: Record<number, string> = {
-  0: "artificial intelligence policy safety ethics",
-  1: "technology privacy surveillance digital rights",
-  2: "open source software community future models",
-  3: "climate environment technology solutions policy",
-  4: "democracy governance institutions global policy",
-  5: "health medicine biotechnology longevity research",
-  6: "media information culture creativity misinformation",
-};
+export const THEME_QUERY_BANK = [
+  "artificial intelligence policy safety ethics",
+  "technology privacy surveillance digital rights",
+  "open source software community future models",
+  "climate environment technology solutions policy",
+  "democracy governance institutions global policy",
+  "health medicine biotechnology longevity research",
+  "media information culture creativity misinformation",
+  "labor work education inequality institutions",
+  "energy infrastructure housing urban systems",
+  "science space exploration computing frontiers",
+  "agriculture food water sustainability",
+  "migration borders identity multilingual societies",
+  "design accessibility interfaces everyday technology",
+  "cybersecurity trust resilience digital society",
+] as const;
+
+export function getThemeQueryForDay(dayNumber: number): string {
+  const index = ((dayNumber % THEME_QUERY_BANK.length) + THEME_QUERY_BANK.length) % THEME_QUERY_BANK.length;
+  return THEME_QUERY_BANK[index];
+}
 
 export function getThemeQuery(): string {
-  return THEME_QUERY_BANK[new Date().getDay()] ?? THEME_QUERY_BANK[0];
+  return getThemeQueryForDay(Math.floor(Date.now() / 86_400_000));
 }
 
 export function getIdeaQuery(ideaTitle: string): string {

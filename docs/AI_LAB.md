@@ -46,7 +46,9 @@ Retries: ordinary failures retry up to 3 attempts with bounded backoff; rate-lim
 
 ### 02:30 — Theme
 Theme research fetches live news (Newsdata + Currents APIs → `searchCache`,
-24h TTL). Theme Setter receives a dated 14-day theme list and must choose a
+24h TTL). The research query rotates across 14 UTC day slots so the
+same research domain is not fed back into the Lab inside the 14-day novelty
+window. Theme Setter receives a dated 14-day theme list and must choose a
 materially different topic. The writer enforces this with a lexical + LLM
 novelty check, resamples once on a repeat, and records an audit row rather than
 leaving the Lab themeless.
