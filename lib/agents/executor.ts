@@ -22,7 +22,7 @@
 
 import { db } from "@/db";
 import { aiQueue, aiUsage, aiModerationLog } from "@/db/schema";
-import { and, eq, gte, inArray, lt, lte, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { getAgent } from "./personas";
 import { callAgent } from "./providers/index";
 import { buildPrompt } from "./prompts";
@@ -55,6 +55,8 @@ function retryDelayMs(retryCount: number): number {
   return Math.min(30_000 * 2 ** Math.max(retryCount - 1, 0), 15 * 60_000);
 }
 
+const STALE_CLAIM_MINUTES = 15;
+
 export async function processQueue(
   limit = 5
 ): Promise<{ processed: number; failed: number; deferred: number; errors: Array<{ id: string; agentId: string; actionType: string; error: string }> }> {
@@ -76,7 +78,7 @@ export async function processQueue(
     // Mark as in_progress while still in the same transaction
     await tx
       .update(aiQueue)
-      .set({ status: "in_progress" })
+      .set({ status: "in_progress", executedAt: new Date() })
       .where(inArray(aiQueue.id, ids));
 
     return ids;
@@ -160,7 +162,7 @@ export async function processQueue(
  */
 export async function resetStuckQueueItems(): Promise<number> {
   const now = new Date();
-  const staleThreshold = new Date(now.getTime() - 10 * 60 * 1000);
+  const staleThreshold = new Date(now.getTime() - STALE_CLAIM_MINUTES * 60 * 1000);
   const recentFailureCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
   const stuckReset = await db
@@ -169,11 +171,14 @@ export async function resetStuckQueueItems(): Promise<number> {
       status: "pending",
       errorMessage: "reset by catchup — was stuck in_progress",
       scheduledFor: now,
+      executedAt: null,
     })
     .where(and(
       eq(aiQueue.status, "in_progress"),
-      lt(aiQueue.scheduledFor, staleThreshold),
-      lt(aiQueue.retryCount, 3),
+      or(
+        and(lt(aiQueue.executedAt, staleThreshold), lt(aiQueue.retryCount, 3)),
+        and(isNull(aiQueue.executedAt), lt(aiQueue.scheduledFor, staleThreshold), lt(aiQueue.retryCount, 3))
+      ),
     ))
     .returning({ id: aiQueue.id });
 

@@ -10,6 +10,7 @@ const dbState = vi.hoisted(() => ({
   fullQueueItems:    [] as Array<Record<string, unknown>>,
   usageRows:         [] as Array<Record<string, unknown>>,
   capturedUpdates:   [] as Array<{ id: string; data: Record<string, unknown> }>,
+  claimedUpdates:    [] as Array<Record<string, unknown>>,
   capturedInserts:   [] as Array<{ table: string; data: Record<string, unknown> }>,
 }));
 
@@ -17,7 +18,10 @@ const dbState = vi.hoisted(() => ({
 const mockTransaction = vi.hoisted(() =>
   vi.fn().mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => {
     const mockTxUpdate = vi.fn().mockReturnValue({
-      set: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) }),
+      set: vi.fn().mockImplementation((data: Record<string, unknown>) => {
+        dbState.claimedUpdates.push(data);
+        return { where: vi.fn().mockResolvedValue(undefined) };
+      }),
     });
     const mockTxExecute = vi.fn().mockResolvedValue(dbState.transactionItems);
     return cb({ execute: mockTxExecute, update: mockTxUpdate });
@@ -93,6 +97,7 @@ function resetState() {
   dbState.fullQueueItems    = [];
   dbState.usageRows         = [];
   dbState.capturedUpdates   = [];
+  dbState.claimedUpdates    = [];
   dbState.capturedInserts   = [];
   selectCallCount           = 0;
   vi.clearAllMocks();
@@ -112,7 +117,10 @@ function resetState() {
   // Re-wire transaction mock
   mockTransaction.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => {
     const mockTxUpdate = vi.fn().mockReturnValue({
-      set: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) }),
+      set: vi.fn().mockImplementation((data: Record<string, unknown>) => {
+        dbState.claimedUpdates.push(data);
+        return { where: vi.fn().mockResolvedValue(undefined) };
+      }),
     });
     const mockTxExecute = vi.fn().mockResolvedValue(dbState.transactionItems);
     return cb({ execute: mockTxExecute, update: mockTxUpdate });
@@ -336,6 +344,19 @@ describe("processQueue — success path", () => {
     expect(themeInsert).toBeDefined();
   });
 
+  it("stamps executedAt when claiming a row", async () => {
+    dbState.transactionItems = [{ id: "item-1" }];
+    dbState.fullQueueItems   = [makeQueueItem()];
+    dbState.usageRows        = [];
+    mockCallAgent.mockResolvedValueOnce(
+      JSON.stringify({ theme: "X", rationale: "R", suggested_angles: [] })
+    );
+
+    await processQueue(1);
+
+    expect(dbState.claimedUpdates.some((u) => u.status === "in_progress" && u.executedAt instanceof Date)).toBe(true);
+  });
+
   it("marks the queue item completed after success", async () => {
     dbState.transactionItems = [{ id: "item-1" }];
     dbState.fullQueueItems   = [makeQueueItem()];
@@ -510,5 +531,6 @@ describe("resetStuckQueueItems", () => {
     expect(recovered).toBe(4);
     expect(dbState.capturedUpdates).toHaveLength(4);
     expect(dbState.capturedUpdates.every((u) => u.data.status === "pending")).toBe(true);
+    expect(dbState.capturedUpdates[0].data.executedAt).toBeNull();
   });
 });

@@ -54,7 +54,7 @@ Gone with migration 0016, but if you see old indexes named
 ### 4. Executor status vocabulary
 `pending → in_progress → completed | failed | failed_permanently |
 rate_limited | deferred | skipped | cancelled`. Catchup cron resets
-`in_progress` rows older than 15 min back to `pending`.
+`in_progress` rows whose claim timestamp is older than 15 min back to `pending`. Legacy rows without a claim timestamp fall back to their scheduled time.
 
 ### 5. `aiUsage.feature` is the budget key
 AI Lab agent rows must be inserted with `feature='ai_lab'`; the executor's daily
