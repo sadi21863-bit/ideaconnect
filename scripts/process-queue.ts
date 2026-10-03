@@ -32,6 +32,7 @@ import {
   queueMemoryReflection,
 } from "@/lib/agents/scheduler";
 import { getParticipants } from "@/lib/agents/personas";
+import { HANDLED_QUEUE_STATUSES_SQL } from "../lib/agents/queue-statuses";
 
 const client = postgres(process.env.DATABASE_URL!, { prepare: false });
 const rawDb  = drizzle(client);
@@ -54,7 +55,7 @@ async function ensureDailyWorkQueued(): Promise<void> {
     SELECT 1 FROM ai_queue
     WHERE  action_type = 'themeresearch'
       AND  DATE(scheduled_for AT TIME ZONE 'UTC') = ${today}
-      AND  status IN ('pending', 'in_progress', 'completed')
+      AND  status IN (${sql.raw(HANDLED_QUEUE_STATUSES_SQL)})
     LIMIT 1
   `) as unknown as [unknown?];
 
@@ -71,7 +72,7 @@ async function ensureDailyWorkQueued(): Promise<void> {
 
   // ── Theme ────────────────────────────────────────────────────────────
   // Primary check: theme row in ai_themes (most reliable — means it was processed).
-  // Secondary check: pending/in_progress queue item (generation in flight).
+  // Secondary check: any handled queue item for today (generation in flight or terminal).
   const [themeInDb] = await rawDb.execute(sql`
     SELECT 1 FROM ai_themes WHERE date = ${today} LIMIT 1
   `) as unknown as [unknown?];
@@ -80,7 +81,7 @@ async function ensureDailyWorkQueued(): Promise<void> {
     SELECT 1 FROM ai_queue
     WHERE  action_type   = 'theme_select'
       AND  scheduled_for >= (${today}::date)
-      AND  status        IN ('pending', 'in_progress')
+      AND  status        IN (${sql.raw(HANDLED_QUEUE_STATUSES_SQL)})
     LIMIT 1
   `) as unknown as [unknown?];
 
@@ -111,10 +112,7 @@ async function ensureDailyWorkQueued(): Promise<void> {
         FROM ai_queue
         WHERE  action_type = 'post_idea'
           AND  created_at >= (${today}::date)
-          AND  (
-            status IN ('pending', 'in_progress', 'rate_limited', 'deferred')
-            OR (status = 'failed' AND retry_count < 3)
-          )
+          AND  status IN (${sql.raw(HANDLED_QUEUE_STATUSES_SQL)})
       `) as unknown as Array<{ agent_id: string | null }>;
       const activeAgentIds = new Set(
         activeIdeaAgents.map((row) => row.agent_id).filter((id): id is string => Boolean(id))
@@ -132,11 +130,9 @@ async function ensureDailyWorkQueued(): Promise<void> {
   // Primary check: row in ai_lab_archives (archive was generated — most reliable).
   // Secondary check: pending/in_progress queue item (generation in flight).
   //
-  // IMPORTANT: do NOT check for 'completed'/'rate_limited' queue status here.
-  // Those are terminal queue statuses — a completed archive_day row means the
-  // archive ran, regardless of whether the queue item itself is 'completed' or
-  // 'rate_limited'. Using ai_lab_archives as ground truth prevents re-queuing
-  // after the archive has already been generated.
+  // IMPORTANT: completed/dead-lettered rows are also treated as handled here.
+  // The archive table remains the source of truth; including terminal queue
+  // states prevents a dead-lettered archive from being recreated every beat.
   const nowUTC   = new Date();
   const yesterday = new Date(Date.UTC(
     nowUTC.getUTCFullYear(), nowUTC.getUTCMonth(), nowUTC.getUTCDate() - 1,
@@ -151,7 +147,7 @@ async function ensureDailyWorkQueued(): Promise<void> {
     SELECT 1 FROM ai_queue
     WHERE  action_type           = 'archive_day'
       AND  prompt_context->>'date' = ${yesterdayStr}
-      AND  status                IN ('pending', 'in_progress')
+      AND  status                IN (${sql.raw(HANDLED_QUEUE_STATUSES_SQL)})
     LIMIT 1
   `) as unknown as [unknown?];
 
@@ -170,7 +166,7 @@ async function ensureDailyWorkQueued(): Promise<void> {
       SELECT 1 FROM ai_queue
       WHERE  action_type           = 'archive_day'
         AND  prompt_context->>'date' = ${today}
-        AND  status                IN ('pending', 'in_progress')
+        AND  status                IN (${sql.raw(HANDLED_QUEUE_STATUSES_SQL)})
       LIMIT 1
     `) as unknown as [unknown?];
 
@@ -267,7 +263,7 @@ async function queueRollupIfMissing(
       SELECT 1 FROM ai_queue
       WHERE  action_type                  = ${actionType}
         AND  prompt_context->>'periodStart' = ${pStart}
-        AND  status IN ('pending', 'in_progress')
+        AND  status IN (${sql.raw(HANDLED_QUEUE_STATUSES_SQL)})
       LIMIT 1
     `) as unknown as [unknown?];
 
@@ -302,7 +298,7 @@ async function main() {
   //    item whose date already has a row in ai_lab_archives is a duplicate — cancel it.
   const purged = await rawDb.execute(sql`
     UPDATE ai_queue
-    SET    status = 'failed',
+    SET    status = 'cancelled',
            error_message = 'cancelled: duplicate archive_day — archive already exists in ai_lab_archives'
     WHERE  action_type = 'archive_day'
       AND  status      = 'pending'
@@ -321,7 +317,7 @@ async function main() {
   //     prevents re-running an already-generated period on the next Sunday beat).
   const purgedRollups = await rawDb.execute(sql`
     UPDATE ai_queue
-    SET    status = 'failed',
+    SET    status = 'cancelled',
            error_message = 'cancelled: duplicate rollup — rollup already exists in ai_lab_rollups'
     WHERE  action_type IN ('rollup_week', 'rollup_month')
       AND  status = 'pending'

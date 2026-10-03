@@ -14,6 +14,7 @@ import { and, asc, desc, eq, gte, inArray, lt } from "drizzle-orm";
 import { z } from "zod";
 import { ALL_AGENTS, getAdmins, getConductor, getParticipants } from "./personas";
 import { getThemeQuery } from "./research";
+import { HANDLED_QUEUE_STATUSES } from "./queue-statuses";
 
 const AI_LAB_ROOM_ID = process.env.AI_LAB_ROOM_ID!;
 
@@ -181,7 +182,7 @@ export async function queueThemeSelection(): Promise<void> {
     .where(and(
       eq(aiQueue.actionType, "theme_select"),
       gte(aiQueue.createdAt, new Date(`${today}T00:00:00Z`)),
-      inArray(aiQueue.status, ["pending", "in_progress"])
+      inArray(aiQueue.status, [...HANDLED_QUEUE_STATUSES])
     ))
     .limit(1);
   if (existingQueueItem) {

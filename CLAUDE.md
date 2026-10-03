@@ -79,7 +79,7 @@ ensures Debate of the Day and memory reflection exist. Provider probe failures
 finish the run red after the queue drain.
 
 ### Executor mechanics
-- Claims pending rows with `FOR UPDATE SKIP LOCKED` and records the claim time; catchup resets `in_progress` rows only after 15 minutes of claim staleness. Ordinary failures retry up to 3 attempts with bounded backoff; rate-limited items wait until the next UTC day; feature-budget items defer for 15 minutes and are requeued by catchup.
+- Claims pending rows with `FOR UPDATE SKIP LOCKED` and records the claim time; catchup resets only `in_progress`, `deferred`, and `rate_limited` rows. Self-heal treats pending, active, completed, dead-lettered, cancelled, and skipped rows as handled so a terminal failure cannot be re-queued every beat. Ordinary failures retry up to 3 attempts with bounded backoff; rate-limited items wait until the next UTC day; feature-budget items defer for 15 minutes and are requeued by catchup.
 - GitHub Actions passes `OPENROUTER_API_KEY` to both the connectivity probe and queue processor. The queue still runs when the probe fails, but the workflow finishes red so provider outages cannot hide behind a green run.
 - Feature quota: AI Lab usage rows are labelled `feature='ai_lab'`; the executor sums that label for the current UTC `date` against the budget fraction of daily TPD. Conductor's self-contained LLM call also records usage. Over-budget items defer, not dead-letter.
 - Self-contained handlers bypass `buildPrompt`: `archive_day`, `quality_review_archive`, `rollup_week/month`, `conductor`, `themeresearch`, `ai_lab_debate`, `memory_reflect`.
@@ -177,7 +177,7 @@ npm run dev                   # http://localhost:3099
 ## Testing
 
 ```bash
-npm test                              # 345 tests / 30 files (Vitest)
+npm test                              # 347 tests / 30 files (Vitest)
 npx tsc --noEmit                      # 0 errors
 npx tsx scripts/check-agents.ts       # 9/9 across groq+openrouter
 ```

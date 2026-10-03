@@ -528,8 +528,8 @@ describe("resetStuckQueueItems", () => {
 
     const recovered = await resetStuckQueueItems();
 
-    expect(recovered).toBe(4);
-    expect(dbState.capturedUpdates).toHaveLength(4);
+    expect(recovered).toBe(3);
+    expect(dbState.capturedUpdates).toHaveLength(3);
     expect(dbState.capturedUpdates.every((u) => u.data.status === "pending")).toBe(true);
     expect(dbState.capturedUpdates[0].data.executedAt).toBeNull();
   });

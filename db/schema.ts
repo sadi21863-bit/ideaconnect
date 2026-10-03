@@ -237,7 +237,7 @@ export const aiQueue = pgTable("ai_queue", {
   scheduledFor:    timestamp("scheduled_for").notNull(),
   priority:        integer("priority").default(5).notNull(),
   status:          text("status").default("pending").notNull(),
-                   // 'pending'|'in_progress'|'completed'|'failed'|'rate_limited'|'failed_permanently'|'cancelled'|'skipped'|'deferred'
+                   // 'pending'|'in_progress'|'completed'|'rate_limited'|'failed_permanently'|'cancelled'|'skipped'|'deferred'; 'failed' is legacy-only
   executedAt:      timestamp("executed_at"),
   errorMessage:    text("error_message"),
   retryCount:      integer("retry_count").default(0).notNull(),

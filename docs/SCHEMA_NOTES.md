@@ -52,9 +52,12 @@ Gone with migration 0016, but if you see old indexes named
 `unique_debate_*` in meta docs, they no longer exist.
 
 ### 4. Executor status vocabulary
-`pending → in_progress → completed | failed | failed_permanently |
-rate_limited | deferred | skipped | cancelled`. Catchup cron resets
-`in_progress` rows whose claim timestamp is older than 15 min back to `pending`. Legacy rows without a claim timestamp fall back to their scheduled time.
+`pending → in_progress → completed | failed_permanently | rate_limited |
+deferred | skipped | cancelled`. `failed` is a legacy status reserved for old
+rows; the executor no longer writes it. Duplicate-purge rows use the terminal
+`cancelled` status. Catchup cron resets `in_progress` rows whose claim timestamp
+is older than 15 min back to `pending`. Legacy rows without a claim timestamp
+fall back to their scheduled time.
 
 ### 5. `aiUsage.feature` is the budget key
 AI Lab agent rows must be inserted with `feature='ai_lab'`; the executor's daily

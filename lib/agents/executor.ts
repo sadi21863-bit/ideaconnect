@@ -22,7 +22,7 @@
 
 import { db } from "@/db";
 import { aiQueue, aiUsage, aiModerationLog } from "@/db/schema";
-import { and, eq, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { getAgent } from "./personas";
 import { callAgent } from "./providers/index";
 import { buildPrompt } from "./prompts";
@@ -163,7 +163,6 @@ export async function processQueue(
 export async function resetStuckQueueItems(): Promise<number> {
   const now = new Date();
   const staleThreshold = new Date(now.getTime() - STALE_CLAIM_MINUTES * 60 * 1000);
-  const recentFailureCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
   const stuckReset = await db
     .update(aiQueue)
@@ -200,17 +199,7 @@ export async function resetStuckQueueItems(): Promise<number> {
     ))
     .returning({ id: aiQueue.id });
 
-  const failedReset = await db
-    .update(aiQueue)
-    .set({ status: "pending", scheduledFor: now })
-    .where(and(
-      eq(aiQueue.status, "failed"),
-      lt(aiQueue.retryCount, 3),
-      gte(aiQueue.executedAt, recentFailureCutoff),
-    ))
-    .returning({ id: aiQueue.id });
-
-  return stuckReset.length + deferredReset.length + rateLimitedReset.length + failedReset.length;
+  return stuckReset.length + deferredReset.length + rateLimitedReset.length;
 }
 
 // ─── Per-item execution ───────────────────────────────────────────────

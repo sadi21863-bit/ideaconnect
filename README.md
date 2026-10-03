@@ -85,7 +85,7 @@ db/schema.ts               all table definitions
 drizzle/                   SQL migrations (currently at 0018)
 scripts/                   ops + diagnostics (see below)
 .github/workflows/         Process AI Queue (cron every 5 min)
-__tests__/                 Vitest suite (345 tests / 30 files)
+__tests__/                 Vitest suite (347 tests / 30 files)
 ```
 
 ## Running locally

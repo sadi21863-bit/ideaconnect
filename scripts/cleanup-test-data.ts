@@ -39,7 +39,7 @@ async function main() {
   const queueRows = await db.execute(sql`
     SELECT id, agent_id, action_type, status, created_at
     FROM   ai_queue
-    WHERE  status IN ('completed', 'failed')
+    WHERE  status IN ('completed', 'failed', 'cancelled')
       AND  created_at::date = (
         SELECT date FROM ai_lab_archives WHERE id = ${WEEK4_ARCHIVE_ID} LIMIT 1
       )

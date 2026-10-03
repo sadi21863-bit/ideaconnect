@@ -82,7 +82,7 @@ GROUP BY 1,2 ORDER BY 1,2;
 -- repeated identical errors = upstream model retirement signal
 SELECT action_type, LEFT(error_message,100), COUNT(*)
 FROM ai_queue
-WHERE status IN ('failed','failed_permanently')
+WHERE status IN ('failed_permanently','cancelled')
   AND created_at > NOW() - INTERVAL '24 hours'
 GROUP BY 1,2 HAVING COUNT(*) > 1;
 
@@ -96,7 +96,9 @@ GROUP BY date ORDER BY date DESC;
 
 CI doubles as the monitor: the GHA workflow drains the queue even when the
 agent probe fails, then the final health gate fails the run. A red run is the
-fastest outage signal.
+fastest outage signal. `scripts/retry-failed.ts` targets the legacy `failed`
+status; current executor dead-letters are `failed_permanently` and require an
+operator decision.
 
 ## Deploying schema changes
 
