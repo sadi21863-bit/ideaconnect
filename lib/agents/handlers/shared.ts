@@ -40,7 +40,8 @@ export async function upsertUsage(
 export async function shouldFetchResearch(
   ideaTitle: string,
   theme: string,
-  actionType: string
+  actionType: string,
+  usageAgentId?: string
 ): Promise<{ needsResearch: boolean; query: string } | null> {
   try {
     const prompt = `You are deciding whether a response to the following debate topic needs current real-world data.
@@ -62,6 +63,15 @@ Respond in JSON only:
       prompt,
       { maxTokens: 80, jsonMode: true }
     );
+    if (usageAgentId) {
+      await upsertUsage(
+        usageAgentId,
+        new Date().toISOString().slice(0, 10),
+        "groq",
+        "ai_lab",
+        res.totalTokens ?? 0
+      );
+    }
     const parsed = JSON.parse(res.text.trim());
     return { needsResearch: Boolean(parsed.needsResearch), query: String(parsed.query ?? "") };
   } catch {

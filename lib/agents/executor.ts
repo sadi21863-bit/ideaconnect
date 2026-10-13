@@ -315,7 +315,7 @@ async function executeItem(item: AIQueue): Promise<"completed" | "deferred"> {
     const qcTheme  = String(c2.theme ?? "");
     if (qcTitle) {
       try {
-        const decision = await shouldFetchResearch(qcTitle, qcTheme, "quality_review");
+        const decision = await shouldFetchResearch(qcTitle, qcTheme, "quality_review", agent.id);
         if (decision?.needsResearch && decision.query) {
           const result = await fetchResearch(decision.query, today);
           if (result.citations.length >= 2) {
@@ -334,7 +334,7 @@ async function executeItem(item: AIQueue): Promise<"completed" | "deferred"> {
     const theme     = String(c2.theme ?? "");
     if (ideaTitle) {
       try {
-        const decision = await shouldFetchResearch(ideaTitle, theme, item.actionType);
+        const decision = await shouldFetchResearch(ideaTitle, theme, item.actionType, agent.id);
         if (decision?.needsResearch && decision.query) {
           const date   = today;
           const result = await fetchResearch(decision.query, date);
