@@ -98,7 +98,8 @@ CI doubles as the monitor: the GHA workflow drains the queue even when the
 agent probe fails, then the final health gate fails the run. A red run is the
 fastest outage signal. `scripts/retry-failed.ts` targets the legacy `failed`
 status; current executor dead-letters are `failed_permanently` and require an
-operator decision.
+operator decision. Invalid or non-positive `GROQ_DAILY_TPD_LIMIT` values fall
+back to the documented 200,000-token default.
 
 ## Deploying schema changes
 

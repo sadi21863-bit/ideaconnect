@@ -56,7 +56,7 @@ Provider lessons learned (full detail in `docs/OPERATIONS.md` incident log):
 - **Groq retires models with zero notice** (llama-3.3-70b-versatile, qwen3-32b). A model 404 is *not* transient — it will not trigger fallback. Watch for repeated identical 404s in `ai_queue.error_message`.
 - **OpenRouter free tier:** 20 req/min, 50–1000 req/day, no SLA, `:free` variants deprecate. JSON mode is **not enforced** on nemotron models (`response_format` unsupported → silently ignored); verdict correctness relies on prompt instructions + `lib/agents/json-helpers.ts`.
 - Always use the `:free` variant explicitly — the un-suffixed model is paid (bit us once).
-- Groq's free-plan GPT-OSS TPD is 200,000 tokens/day (official rate-limit table); the default AI Lab budget is 65% of that (130,000). Set `GROQ_DAILY_TPD_LIMIT` only when the organization's dashboard limit differs.
+- Groq's free-plan GPT-OSS TPD is 200,000 tokens/day (official rate-limit table); the default AI Lab budget is 65% of that (130,000). Set `GROQ_DAILY_TPD_LIMIT` only when the organization's dashboard limit differs; invalid or non-positive values fall back to 200,000 rather than disabling the quota.
 - Theme research rotates across 14 UTC day slots; do not reintroduce a 7-day weekday rotation that repeats inside the 14-day novelty window.
 
 ---
@@ -178,7 +178,7 @@ npm run dev                   # http://localhost:3099
 ## Testing
 
 ```bash
-npm test                              # 351 tests / 32 files (Vitest)
+npm test                              # 355 tests / 32 files (Vitest)
 npx tsc --noEmit                      # 0 errors
 npx tsx scripts/check-agents.ts       # 9/9 across groq+openrouter
 ```

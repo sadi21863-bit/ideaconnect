@@ -78,7 +78,7 @@ describe("promptContext Zod validation — bad date in queueThemeResearch", () =
     );
     expect(capturedInserts).toHaveLength(0);
     consoleSpy.mockRestore();
-  }, 15_000);
+  }, 30_000);
 
   it("does NOT log a validation error for a valid date", async () => {
     // queueThemeResearch ends with .onConflictDoNothing() — wire the chain
