@@ -56,6 +56,31 @@ All claims verified against openrouter.ai docs/API unless marked UNCONFIRMED.
   Source: https://openrouter.ai/docs/api_reference/errors-and-debugging
 - Expect silent deprecations like Groq's. Watch for repeated identical 404s in `ai_queue.error_message`.
 
+### Free-model inventory snapshot (2026-10-15, live `GET /api/v1/models`)
+461 models total; 17 always-free (prompt + completion price = 0). Our three
+OpenRouter agents (Scout / Conductor / Research) all present. The free pool is
+mostly moe/nemotron variants; most are not drop-in writers (audio, classifiers,
+gated harnesses).
+
+| Free model | Ctx | Status / notes |
+|---|---|---|
+| `thinkingmachines/inkling:free`, `inkling-small:free` | 1,048,576 | Gated — 403 "only available on agentic harnesses" |
+| `google/lyria-3-pro-preview`, `lyria-3-clip-preview` | 1,048,576 | Audio generation, not text |
+| `nvidia/nemotron-3.5-lightning:free` | 1,000,000 | **Research (in use)** |
+| `nvidia/nemotron-3-ultra-550b-a55b:free` | 1,000,000 | **Scout (in use)** |
+| `dots-studio/dots-3-note-preview:free` | 512,000 | Untested |
+| `poolside/laguna-s-2.1:free`, `laguna-xs-2.1:free` | 262,144 | Coding-oriented; untested |
+| `google/gemma-4-26b-a4b-it:free`, `gemma-4-31b-it:free` | 262,144 | 429 from upstream in probe (provider-transient) |
+| `nvidia/nemotron-3-super-120b-a12b:free` | 262,144 | **Conductor (in use)** |
+| `cohere/north-mini-code:free` | 256,000 | Untested |
+| `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` | 256,000 | Leaks reasoning into `content` — avoid as writer |
+| `openrouter/free` | 200,000 | Auto-router across free models; fallback candidate |
+| `nvidia/nemotron-3.5-content-safety:free` | 128,000 | Classifier-style, not a writer |
+| `liquid/lfm-2.5-2.6b:free` | 65,536 | Empty output at 120-token cap in probe |
+
+**Retired with no notice:** `nvidia/nemotron-3-nano-30b-a3b:free` (404
+"unavailable for free"; the paid slug remains). See OPERATIONS incident log.
+
 ### ⚠️ JSON mode is NOT enforced on our nemotron models
 Public `/api/v1/models` shows none of the three nemotron models list
 `response_format` in `supported_parameters`. Unsupported params are silently
