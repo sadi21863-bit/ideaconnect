@@ -138,6 +138,13 @@ Every code commit updates relevant docs first:
 
 ## Incident Log
 
+### 2026-10-15 — GHA queue job hung after drain (pool leak)
+Every `scripts/process-queue.ts` run kept the Node event loop alive after
+"Finished" because the executor's `@/db` postgres pool was never closed — jobs
+burned ~5 extra minutes and one busy run was cancelled at the 10-minute job
+ceiling. Fix: close both pools (`client.end()` for the script's own client and
+`db.$client.end()` for the executor's) before returning.
+
 ### 2026-08-23 — Research agent on PAID model
 `nemotron-3.5-lightning` without the `:free` suffix is paid ($0.08/$0.20 per M
 tokens). Caught by platform research, fixed same day. Rule: always spell the

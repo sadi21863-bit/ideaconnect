@@ -30,6 +30,11 @@ describe("process-queue workflow", () => {
     expect(processScript).toContain("action_type <> 'conductor'");
   });
 
+  it("closes both postgres pools so the GHA job can exit", () => {
+    expect(processScript).toContain("await client.end()");
+    expect(processScript).toContain("await db.$client.end()");
+  });
+
   it("keeps queue processing after a health failure and fails at the end", () => {
     expect(workflow).toContain("continue-on-error: true");
     expect(workflow.indexOf("name: Process AI queue")).toBeLessThan(

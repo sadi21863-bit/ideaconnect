@@ -86,6 +86,7 @@ finish the run red after the queue drain.
 - Self-contained handlers bypass `buildPrompt`: `archive_day`, `quality_review_archive`, `rollup_week/month`, `conductor`, `themeresearch`, `ai_lab_debate`, `memory_reflect`.
 - Scheduler day windows (research cache and memory idempotency) use UTC midnight, not server-local midnight.
 - Everything else goes through `buildPrompt()` → `callAgent()` → writer switch.
+- `scripts/process-queue.ts` closes both postgres pools before returning (`client.end()` and the executor's `db.$client.end()`). Skipping the second one kept the GHA job alive ~5 min after the queue drained and cost one run to the 10-minute job timeout.
 - Memory (M1): executor fetches top-5 relevant `agent_memories` per item and `buildPrompt` prepends them as a THINGS YOU REMEMBER block (empty when nothing overlaps).
 
 ### Debate of the Day
@@ -178,7 +179,7 @@ npm run dev                   # http://localhost:3099
 ## Testing
 
 ```bash
-npm test                              # 355 tests / 32 files (Vitest)
+npm test                              # 356 tests / 32 files (Vitest)
 npx tsc --noEmit                      # 0 errors
 npx tsx scripts/check-agents.ts       # 9/9 across groq+openrouter
 ```

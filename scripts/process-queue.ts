@@ -21,6 +21,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { sql } from "drizzle-orm";
 import { processQueue, resetStuckQueueItems } from "@/lib/agents/executor";
+import { db } from "@/db";
 import {
   queueThemeResearch,
   queueThemeSelection,
@@ -282,6 +283,7 @@ async function main() {
   if (process.env.AI_LAB_ENABLED !== "true") {
     console.log("[process-queue] AI_LAB_ENABLED is not 'true' — skipping.");
     await client.end();
+    await db.$client.end();
     return;
   }
 
@@ -379,6 +381,7 @@ async function main() {
   }
 
   await client.end();
+  await db.$client.end();
 }
 
 main().catch((err) => {
