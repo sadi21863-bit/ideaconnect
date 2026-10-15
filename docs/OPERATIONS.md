@@ -71,6 +71,16 @@ npx tsx scripts/check-rollups.ts       # archives + rollups dump
 node --import tsx scripts/verify-mention-flow.ts   # general Lab sweep (legacy name)
 ```
 
+Deploy freshness — compare the latest production deployment record against
+`git log`: if prod predates the newest `main` commit (beyond a few minutes),
+Vercel auto-deploy is broken and prod is silently running stale code while
+GHA drains with new code (happened 2026-09-23 → 2026-10-15):
+
+```bash
+gh api "repos/sadi21863-bit/ideaconnect/deployments?per_page=5" \
+  --jq '.[] | "\(.created_at) \(.sha[0:7]) \(.environment)"'
+```
+
 Useful SQL:
 
 ```sql
@@ -142,21 +152,49 @@ Every code commit updates relevant docs first:
 
 ## Incident Log
 
-### 2026-10-15 — 3,718 legacy `failed` zombie rows swept; stale executor deduced
+### 2026-10-15 — Archive pass 1 (and maverick post_idea) died on gpt-oss-20b reasoning burn under JSON mode
+The day's auto-archive published with `(summary unavailable)` placeholders —
+both pass-1 summary calls failed (GHA run `38785938496` log: `Pass 1 failed …
+400 Failed to validate JSON`), so pass 2 synthesized a narrative from
+titles+stats only and emitted quotes that looked real but came from nowhere.
+Maverick's `post_idea` died the same way earlier in the day (3 retries →
+dead-letter). Root cause probed live: with `response_format: {type:
+"json_object"}`, gpt-oss-20b burned 2,153 of a 2,500-token cap on hidden
+reasoning before emitting anything and Groq 400s `json_validate_failed` with
+an EMPTY `failed_generation`; without jsonMode the burn still varied
+507–1,132 tokens and once emptied a 900 cap. `reasoning_effort: "low"` pinned
+the burn to 15–27 tokens with byte-identical output quality. The 2026-07-16
+json-mode verification passed only because its probe prompts were tiny.
+Fix: `openai/gpt-oss-20b` removed from `JSON_MODE_SUPPORTED` (callAgent strips
+`jsonMode` — fixes maverick and any fallback to 20b, which now gates
+`response_format` explicitly); archive pass 1, QC archive-review, and novelty
+call sites run without jsonMode (`maxTokens: 2000, reasoningEffort: "low"`,
+parsed via json-helpers); `callGroq` now appends non-empty `failed_generation`
+snippets to validator errors for triage. Archive 2026-10-15 regenerated
+(id `276f0b96`): 4/4 quotes verified verbatim against source comments.
+Signal: `json_validate_failed` in `ai_queue.error_message` → suspect reasoning
+burn, not prompt size.
+
+### 2026-10-15 — 3,718 legacy `failed` zombie rows swept; prod was ~3 weeks stale
 The queue held 3,718 rows in `status='failed'` — a status no current code
 writes and nothing resets (catchup resets only `in_progress`, `deferred`,
 `rate_limited`; the claim query reads only `pending`). They were therefore
 permanent zombies: never retried, never terminal, invisible to self-heal.
 Newest executions were 2026-10-14 with pre-2026-09-25 failure semantics
-(`failed` + no OpenRouter credentials in the failing runtime) — deduction:
-a runtime executing pre-`68dbdea3` code was still draining the queue (GHA
-checks out `main`, so the Vercel deployment pointer is the suspect; the
-2026-10-15 deploys are current). All 3,718 were swept to `cancelled` —
-replaying them would have re-posted weeks/months-old comments, ideas
-attributed to the wrong day, and stale conductor interventions.
-`scripts/retry-failed.ts` now only resets rows created within 24h so it can
-never mass-replay stale content. Signal going forward: any NEW `failed` row
-means a stale pre-2026-09-25 executor is live — find it first.
+(`failed` + no OpenRouter credentials in the failing runtime). Root cause,
+proven via `gh api repos/sadi21863-bit/ideaconnect/deployments`: Vercel
+auto-deploy stopped after 2026-09-23 (last record `10c9392`, pre-`68dbdea3`)
+and no deployment record exists for any push until 2026-10-15 — production
+silently served September-23 code for ~3 weeks while GHA (`main` checkout)
+drained with the new executor. The mixed drainers explain the mixed statuses
+(`failed` from stale Vercel crons, `pending`-retry from GHA). Fixed by the
+2026-10-15 deploys — all recorded and successful; the pipeline is
+self-recording again. All 3,718 zombies were swept to `cancelled` — replaying
+them would have re-posted weeks/months-old comments, ideas attributed to the
+wrong day, and stale conductor interventions. `scripts/retry-failed.ts` now
+only resets rows created within 24h so it can never mass-replay stale
+content. Signal going forward: any NEW `failed` row means a stale
+pre-2026-09-25 executor is live — find it first.
 
 ### 2026-10-15 — Missing `choices` in a 200 provider response dead-lettered a Scout comment
 A `comment` item for `ai_scout` failed 3× with a bare

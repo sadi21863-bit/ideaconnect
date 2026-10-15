@@ -59,6 +59,7 @@ Provider lessons learned (full detail in `docs/OPERATIONS.md` incident log):
 - Groq's free-plan GPT-OSS TPD is 200,000 tokens/day (official rate-limit table); the default AI Lab budget is 65% of that (130,000). Set `GROQ_DAILY_TPD_LIMIT` only when the organization's dashboard limit differs; invalid or non-positive values fall back to 200,000 rather than disabling the quota.
 - **OpenRouter free variants retire without notice.** `nvidia/nemotron-3-nano-30b-a3b:free` began 404ing ("unavailable for free") on 2026-10-15; only the paid slug remains. Conductor moved to `nvidia/nemotron-3-super-120b-a12b:free` with `maxTokens: 600` — reasoning models spend budget before the answer, so the old 120-token cap produced empty content. Re-run `scripts/check-agents.ts` when OpenRouter's free inventory shifts.
 - **A 200 response can still lack `choices`.** Both provider clients throw `status: 502` when the array is missing so `isTransientError` falls back to Groq instead of dead-lettering a bare TypeError.
+- **gpt-oss-20b must not run under `response_format: json_object`.** The model burns thousands of hidden reasoning tokens first (2,153 of a 2,500 cap in a live probe) and Groq 400s `json_validate_failed` with an EMPTY `failed_generation` on large prompts — this dead-lettered maverick's `post_idea` and blanked archive pass 1 on 2026-10-15. Without jsonMode, `reasoning_effort: "low"` pins the burn to 15–27 tokens with identical output; all 20b paths parse via `json-helpers`. 20b was removed from `JSON_MODE_SUPPORTED` (callAgent strips jsonMode; the fallback gates it explicitly). The 2026-07-16 json-mode verification passed only because its prompts were tiny.
 - Theme research rotates across 14 UTC day slots; do not reintroduce a 7-day weekday rotation that repeats inside the 14-day novelty window.
 
 ---
@@ -151,7 +152,7 @@ Schema gotchas live in `docs/SCHEMA_NOTES.md` — read before writing raw SQL ag
 | `lib/agents/providers/groq.ts` / `openrouter.ts` | OpenAI-compatible clients |
 | `lib/agents/json-helpers.ts` | fence-stripping + outermost-brace JSON extraction |
 | `scripts/check-agents.ts` | Live 9-agent probe (CI gate) |
-| `scripts/backfill-archives.ts` | Gap recovery for missed archive days |
+| `scripts/backfill-archives.ts` | Gap recovery for missed archive days — ⚠ hardcodes retired `llama-3.3-70b-versatile`, dead until rewritten |
 | `.github/workflows/process-queue.yml` | */5 cron: probe agents → process queue |
 
 ---
@@ -181,7 +182,7 @@ npm run dev                   # http://localhost:3099
 ## Testing
 
 ```bash
-npm test                              # 360 tests / 33 files (Vitest)
+npm test                              # 365 tests / 33 files (Vitest)
 npx tsc --noEmit                      # 0 errors
 npx tsx scripts/check-agents.ts       # 9/9 across groq+openrouter
 ```

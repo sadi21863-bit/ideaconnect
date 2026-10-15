@@ -76,6 +76,30 @@ describe("callGroq — requests", () => {
     );
   });
 
+  it("forwards reasoningEffort as Groq's reasoning_effort param", async () => {
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: "ok" } }],
+    });
+
+    await callGroq("openai/gpt-oss-20b", "sys", "usr", { reasoningEffort: "low" });
+
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ reasoning_effort: "low" }),
+      expect.anything()
+    );
+  });
+
+  it("omits reasoning_effort when reasoningEffort is not set", async () => {
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: "ok" } }],
+    });
+
+    await callGroq("openai/gpt-oss-20b", "sys", "usr");
+
+    const params = mockCreate.mock.calls[0][0] as Record<string, unknown>;
+    expect(params).not.toHaveProperty("reasoning_effort");
+  });
+
   it("returns empty string when content is null", async () => {
     mockCreate.mockResolvedValueOnce({
       choices: [{ message: { content: null } }],
@@ -99,5 +123,46 @@ describe("callGroq — requests", () => {
     mockCreate.mockRejectedValueOnce(rateLimitErr);
 
     await expect(callGroq("model", "sys", "usr")).rejects.toThrow("rate limit exceeded");
+  });
+
+  it("attaches the failed_generation snippet to Groq JSON-validation errors", async () => {
+    // Real Groq body shape (probed 2026-10-15): error = {message, type, code, failed_generation}
+    const validationErr = Object.assign(new Error("400 Failed to validate JSON."), {
+      status: 400,
+      error: {
+        message: "Failed to validate JSON.",
+        type: "invalid_request_error",
+        code: "json_validate_failed",
+        failed_generation: '{"summary": "truncated mid-',
+      },
+    });
+    mockCreate.mockRejectedValueOnce(validationErr);
+
+    await expect(
+      callGroq("openai/gpt-oss-20b", "sys", "usr", { jsonMode: true })
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('failed_generation: {"summary": "truncated mid-'),
+    });
+  });
+
+  it("does not append anything when failed_generation is an empty string", async () => {
+    // Groq reports failed_generation: "" when validation kills an empty
+    // generation (observed 2026-10-15) — the suffix must not be added.
+    const validationErr = Object.assign(new Error("400 Failed to validate JSON."), {
+      status: 400,
+      error: { message: "Failed to validate JSON.", code: "json_validate_failed", failed_generation: "" },
+    });
+    mockCreate.mockRejectedValueOnce(validationErr);
+
+    const caught = (await callGroq("openai/gpt-oss-20b", "sys", "usr").catch((e: unknown) => e)) as Error;
+    expect(caught.message).toBe("400 Failed to validate JSON.");
+    expect(caught.message).not.toContain("failed_generation:");
+  });
+
+  it("leaves errors without failed_generation untouched", async () => {
+    const plainErr = Object.assign(new Error("some other 400"), { status: 400 });
+    mockCreate.mockRejectedValueOnce(plainErr);
+
+    await expect(callGroq("model", "sys", "usr")).rejects.toThrow("some other 400");
   });
 });

@@ -138,11 +138,17 @@ export async function executeArchiveDay(
     );
 
     try {
+      // jsonMode OFF + reasoningEffort "low": with response_format json_object,
+      // gpt-oss-20b burned 2,153 reasoning tokens on a 2,500 cap and 400'd
+      // "json_validate_failed"; without jsonMode the burn still varied
+      // 507–1,132 tokens and once returned empty content. "low" pins it to
+      // 15–27 tokens, output identical, parses via parseJsonResponse.
+      // See OPERATIONS 2026-10-15.
       const res     = await callGroq(
         "openai/gpt-oss-20b",
         "You are a precise debate analyst. Respond with JSON only. No markdown fences.",
         summaryPrompt,
-        { temperature: 0.3, maxTokens: 400, jsonMode: true }
+        { temperature: 0.3, maxTokens: 2000, reasoningEffort: "low" }
       );
       usage.tokens += res.totalTokens ?? 0;
       const p = parseJsonResponse(res.text) as { summary: string; quotes: Array<{ agent: string; text: string; context: string }> };
@@ -404,7 +410,7 @@ export async function executeQualityReviewArchive(
           "openai/gpt-oss-20b",
           "You are a precise debate analyst. Respond with JSON only. No markdown fences.",
           summaryPrompt,
-          { temperature: 0.3, maxTokens: 400, jsonMode: true }
+          { temperature: 0.3, maxTokens: 2000, reasoningEffort: "low" } // see archive pass-1 note above
         );
         qcUsage.tokens += res.totalTokens ?? 0;
         const p = parseJsonResponse(res.text) as { summary: string };

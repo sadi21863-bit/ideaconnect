@@ -107,7 +107,9 @@ async function runNoveltyCheck(
       process.env.AGENT_MODEL_FALLBACK ?? "openai/gpt-oss-20b",
       "You are a novelty judge. Respond in JSON only. No markdown fences.",
       prompt,
-      { maxTokens: 150, jsonMode: true }
+      // jsonMode off (20b 400s under response_format) + low reasoning so the
+      // verdict fits the small cap instead of failing open (see providers/index.ts)
+      { maxTokens: 150, reasoningEffort: "low" }
     );
     const parsed = parseJsonResponse(res.text.trim()) as {
       duplicate?: unknown;

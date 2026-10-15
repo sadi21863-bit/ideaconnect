@@ -17,15 +17,22 @@ function isTransientError(err: unknown): boolean {
 // (ahead of the qwen/qwen3-32b deprecation on 2026-07-17):
 //   openai/gpt-oss-120b       ✓ PASS — no longer 400s; Groq's validator no longer
 //                                trips on this model's reasoning-tag output.
-//   openai/gpt-oss-20b        ✓ PASS
 //   qwen/qwen3.6-27b          ✓ PASS, but preview-tier per Groq docs — not wired
 //                                into production agent config, so omitted here.
 // 2026-08-22: llama-3.3-70b-versatile removed from this set — Groq retired the
 // model entirely (404 on all calls; absent from /v1/models). Scout/Conductor/
 // Research migrated to gpt-oss models in personas.ts.
+// 2026-10-15: openai/gpt-oss-20b removed — with response_format json_object the
+// model spends thousands of reasoning tokens before emitting the answer (2,153
+// of a 2,500 cap in a live probe). On large prompts (archive pass 1, post_idea)
+// the cap is exhausted mid-JSON and Groq 400s "json_validate_failed" with an
+// EMPTY failed_generation. The 2026-07-16 probe only used tiny prompts, where
+// the burn is small. Without response_format the same prompt spent 381
+// reasoning + 385 answer tokens and parsed cleanly. All gpt-oss-20b paths
+// already parse via json-helpers (parseJsonResponse), so prompt-instructed
+// JSON is the correct path for this model.
 const JSON_MODE_SUPPORTED = new Set([
   "openai/gpt-oss-120b",
-  "openai/gpt-oss-20b",
   // OpenRouter free tier — verified live 2026-08-22 (scripts/test-openrouter-json.ts)
   "nvidia/nemotron-3-ultra-550b-a55b:free",
   "nvidia/nemotron-3.5-lightning",
@@ -97,7 +104,12 @@ export async function callAgent(
       console.warn(
         `[ai-lab] ${agent.provider} failed for ${agent.handle} (${agent.model}); falling back to Groq ${FALLBACK_MODEL}. Error: ${(err as Error).message}`
       );
-      const fb = await callGroq(FALLBACK_MODEL, agent.persona, userPrompt, { ...opts, maxTokens: 600 });
+      // Gate jsonMode here too: `opts` is the raw caller request, so without
+      // this the fallback could forward response_format to a model that 400s
+      // on it (gpt-oss-20b since 2026-10-15 — see JSON_MODE_SUPPORTED above).
+      const fbOpts = { ...opts, maxTokens: 600 };
+      if (fbOpts.jsonMode && !JSON_MODE_SUPPORTED.has(FALLBACK_MODEL)) delete fbOpts.jsonMode;
+      const fb = await callGroq(FALLBACK_MODEL, agent.persona, userPrompt, fbOpts);
       if (opts?.usageOut && fb.totalTokens) opts.usageOut.tokens += fb.totalTokens;
       return normalizeHyphens(stripThinkingTags(fb.text));
     } catch (fallbackErr) {
