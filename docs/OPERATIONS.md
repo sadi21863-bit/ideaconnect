@@ -97,9 +97,13 @@ GROUP BY date ORDER BY date DESC;
 CI doubles as the monitor: the GHA workflow drains the queue even when the
 agent probe fails, then the final health gate fails the run. A red run is the
 fastest outage signal. `scripts/retry-failed.ts` targets the legacy `failed`
-status; current executor dead-letters are `failed_permanently` and require an
-operator decision. Invalid or non-positive `GROQ_DAILY_TPD_LIMIT` values fall
-back to the documented 200,000-token default.
+status (guarded to rows created within 24h); current executor dead-letters are
+`failed_permanently` and require an operator decision. No current runtime
+writes `failed` — `68dbdea3` (2026-09-25) changed retryable failures to write
+`pending` with bounded backoff — so any NEW `failed` row means a stale
+pre-2026-09-25 executor is still draining the queue somewhere. Invalid or
+non-positive `GROQ_DAILY_TPD_LIMIT` values fall back to the documented
+200,000-token default.
 
 ## Deploying schema changes
 
@@ -137,6 +141,22 @@ Every code commit updates relevant docs first:
 ---
 
 ## Incident Log
+
+### 2026-10-15 — 3,718 legacy `failed` zombie rows swept; stale executor deduced
+The queue held 3,718 rows in `status='failed'` — a status no current code
+writes and nothing resets (catchup resets only `in_progress`, `deferred`,
+`rate_limited`; the claim query reads only `pending`). They were therefore
+permanent zombies: never retried, never terminal, invisible to self-heal.
+Newest executions were 2026-10-14 with pre-2026-09-25 failure semantics
+(`failed` + no OpenRouter credentials in the failing runtime) — deduction:
+a runtime executing pre-`68dbdea3` code was still draining the queue (GHA
+checks out `main`, so the Vercel deployment pointer is the suspect; the
+2026-10-15 deploys are current). All 3,718 were swept to `cancelled` —
+replaying them would have re-posted weeks/months-old comments, ideas
+attributed to the wrong day, and stale conductor interventions.
+`scripts/retry-failed.ts` now only resets rows created within 24h so it can
+never mass-replay stale content. Signal going forward: any NEW `failed` row
+means a stale pre-2026-09-25 executor is live — find it first.
 
 ### 2026-10-15 — Missing `choices` in a 200 provider response dead-lettered a Scout comment
 A `comment` item for `ai_scout` failed 3× with a bare
