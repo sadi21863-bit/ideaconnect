@@ -61,10 +61,20 @@ export async function callGroq(
 
   // Cast through unknown: create() returns ChatCompletion|Stream union; we never use streaming.
   const response = await groq.chat.completions.create(params, { signal: AbortSignal.timeout(opts.timeoutMs ?? 30_000) }) as unknown as {
-    choices: Array<{ message: { content: string | null } }>;
+    choices?: Array<{ message: { content: string | null } }>;
     usage?: { total_tokens?: number };
   };
-  const text = response.choices[0]?.message?.content ?? "";
+  // A 200 response without `choices` is malformed (provider/proxy hiccup).
+  // Throw a 502-class error so isTransientError triggers the Groq fallback
+  // instead of dead-lettering a bare TypeError. See OPERATIONS incident log.
+  const choice = response.choices?.[0];
+  if (!choice) {
+    throw Object.assign(
+      new Error(`Groq returned no choices for ${model} (malformed 200 response)`),
+      { status: 502 }
+    );
+  }
+  const text = choice.message?.content ?? "";
   const totalTokens =
     typeof response.usage?.total_tokens === "number" ? response.usage.total_tokens : null;
   return { text, totalTokens };

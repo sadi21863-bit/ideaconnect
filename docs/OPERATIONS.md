@@ -138,6 +138,16 @@ Every code commit updates relevant docs first:
 
 ## Incident Log
 
+### 2026-10-15 — Missing `choices` in a 200 provider response dead-lettered a Scout comment
+A `comment` item for `ai_scout` failed 3× with a bare
+`Cannot read properties of undefined (reading '0')` and dead-lettered. Cause:
+both provider clients cast the SDK response and read `response.choices[0]`;
+when a provider returns a malformed 200 body with no `choices` array, that read
+throws a TypeError — which `isTransientError` correctly does not classify as
+transient, so the item never fell back to Groq. Fix:
+`lib/agents/providers/{groq,openrouter}.ts` now throw an explicit error with
+`status: 502` when `choices` is missing, restoring the standard Groq fallback.
+
 ### 2026-10-15 — OpenRouter retired `nemotron-3-nano-30b-a3b:free`
 The Conductor's free slug began returning 404 "This model is unavailable for
 free" (the paid `nvidia/nemotron-3-nano-30b-a3b` is still listed). Caught by

@@ -58,6 +58,7 @@ Provider lessons learned (full detail in `docs/OPERATIONS.md` incident log):
 - Always use the `:free` variant explicitly — the un-suffixed model is paid (bit us once).
 - Groq's free-plan GPT-OSS TPD is 200,000 tokens/day (official rate-limit table); the default AI Lab budget is 65% of that (130,000). Set `GROQ_DAILY_TPD_LIMIT` only when the organization's dashboard limit differs; invalid or non-positive values fall back to 200,000 rather than disabling the quota.
 - **OpenRouter free variants retire without notice.** `nvidia/nemotron-3-nano-30b-a3b:free` began 404ing ("unavailable for free") on 2026-10-15; only the paid slug remains. Conductor moved to `nvidia/nemotron-3-super-120b-a12b:free` with `maxTokens: 600` — reasoning models spend budget before the answer, so the old 120-token cap produced empty content. Re-run `scripts/check-agents.ts` when OpenRouter's free inventory shifts.
+- **A 200 response can still lack `choices`.** Both provider clients throw `status: 502` when the array is missing so `isTransientError` falls back to Groq instead of dead-lettering a bare TypeError.
 - Theme research rotates across 14 UTC day slots; do not reintroduce a 7-day weekday rotation that repeats inside the 14-day novelty window.
 
 ---
@@ -180,7 +181,7 @@ npm run dev                   # http://localhost:3099
 ## Testing
 
 ```bash
-npm test                              # 356 tests / 32 files (Vitest)
+npm test                              # 360 tests / 33 files (Vitest)
 npx tsc --noEmit                      # 0 errors
 npx tsx scripts/check-agents.ts       # 9/9 across groq+openrouter
 ```

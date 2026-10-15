@@ -85,6 +85,15 @@ describe("callGroq — requests", () => {
     expect(result).toEqual({ text: "", totalTokens: null });
   });
 
+  it("throws a transient 502 error when the response has no choices", async () => {
+    mockCreate.mockResolvedValueOnce({});
+
+    await expect(callGroq("model", "sys", "usr")).rejects.toMatchObject({
+      status: 502,
+      message: expect.stringContaining("no choices"),
+    });
+  });
+
   it("propagates errors from the underlying OpenAI client", async () => {
     const rateLimitErr = Object.assign(new Error("rate limit exceeded"), { status: 429 });
     mockCreate.mockRejectedValueOnce(rateLimitErr);
