@@ -43,7 +43,7 @@ Everything runs through one table: `aiQueue`.
    completed, dead-lettered, cancelled, and skipped rows as handled; only a
    genuinely missing action is queued again.
 
-Retries: ordinary failures retry up to 3 attempts with bounded backoff; rate-limit rows wait until the next UTC day; `feature='ai_lab'` budget rows wait 15 minutes and are requeued by catchup. Research-triage calls are metered into the same feature bucket. Permanent failures remain `failed_permanently` for inspection. Scheduler idempotency and research-cache windows use UTC midnight, matching the pipeline timeline.
+Retries: ordinary failures retry up to 3 attempts with bounded backoff; rate-limit rows wait until the next UTC day; `feature='ai_lab'` budget rows wait 15 minutes and are requeued by catchup. Research-triage calls are metered into the same feature bucket. With the default 200,000 Groq free-plan TPD and 65% Lab share, the daily Lab ceiling is 130,000 tokens. Permanent failures remain `failed_permanently` for inspection. Scheduler idempotency and research-cache windows use UTC midnight, matching the pipeline timeline.
 
 ## Daily timeline (UTC)
 

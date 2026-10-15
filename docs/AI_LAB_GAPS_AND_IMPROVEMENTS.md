@@ -10,7 +10,8 @@ research (papers/docs cited inline)._
 
 ### G1 · Token-budget enforcement is dead code  ✅ FIXED 2026-09-27
 The executor's feature-level quota sums `aiUsage.tokens` for rows labelled
-`feature='ai_lab'` on the current UTC `date` against `DAILY_TPD_LIMIT`. Every AI
+`feature='ai_lab'` on the current UTC `date` against `DAILY_TPD_LIMIT`
+(default: 200,000 Groq free-plan TPD, with a 130,000-token Lab ceiling). Every AI
 Lab usage writer now carries that label, including the generic executor path,
 archives/QC, debate, and rollups. Providers return usage data on every call
 (Groq `x_total_tokens`, OpenRouter `usage`) and the handlers thread it into

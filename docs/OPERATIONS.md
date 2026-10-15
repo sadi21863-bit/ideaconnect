@@ -86,7 +86,7 @@ WHERE status IN ('failed_permanently','cancelled')
   AND created_at > NOW() - INTERVAL '24 hours'
 GROUP BY 1,2 HAVING COUNT(*) > 1;
 
--- daily AI Lab token budget (the executor sums feature='ai_lab')
+-- daily AI Lab token budget (default ceiling: 130,000 = 65% of Groq free-plan 200k TPD)
 SELECT date, SUM(tokens) AS day_tokens, COUNT(*) AS agent_rows
 FROM ai_usage
 WHERE agent_id IS NOT NULL AND feature = 'ai_lab'
