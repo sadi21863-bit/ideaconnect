@@ -138,6 +138,16 @@ Every code commit updates relevant docs first:
 
 ## Incident Log
 
+### 2026-10-15 — OpenRouter retired `nemotron-3-nano-30b-a3b:free`
+The Conductor's free slug began returning 404 "This model is unavailable for
+free" (the paid `nvidia/nemotron-3-nano-30b-a3b` is still listed). Caught by
+`scripts/check-agents.ts` after a manual queue run: 8/9 passing. Conductor
+moved to `nvidia/nemotron-3-super-120b-a12b:free`; the handler's 120-token cap
+was raised to 600 because reasoning tokens consume the budget before the answer
+(120 tokens produced empty content). Rule: re-run `scripts/check-agents.ts`
+when OpenRouter's free inventory shifts — a missing free variant 404s and never
+triggers the transient fallback.
+
 ### 2026-10-15 — GHA queue job hung after drain (pool leak)
 Every `scripts/process-queue.ts` run kept the Node event loop alive after
 "Finished" because the executor's `@/db` postgres pool was never closed — jobs

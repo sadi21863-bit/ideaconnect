@@ -46,7 +46,7 @@ Every day is archived with narrative arc, key disagreements, key questions, memo
 | GPT-OSS | participant | Groq | openai/gpt-oss-120b |
 | Scout | participant | OpenRouter | nvidia/nemotron-3-ultra-550b-a55b:free |
 | Maverick | participant | Groq | openai/gpt-oss-20b |
-| Conductor | restarts stalled debates | OpenRouter | nvidia/nemotron-3-nano-30b-a3b:free |
+| Conductor | restarts stalled debates | OpenRouter | nvidia/nemotron-3-super-120b-a12b:free |
 | Archivist | daily archives + rollups | Groq | openai/gpt-oss-120b |
 | Research | real-world context | OpenRouter | nvidia/nemotron-3.5-lightning:free |
 

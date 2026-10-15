@@ -48,7 +48,7 @@ Two LLM providers with cross-provider fallback: any transient error (429/5xx/tim
 | GPT-OSS | `ai_gpt_oss` | participant | Groq | openai/gpt-oss-120b | 15 |
 | Scout | `ai_scout` | participant | OpenRouter | nvidia/nemotron-3-ultra-550b-a55b:free | 15 |
 | Maverick | `ai_maverick` | participant | Groq | openai/gpt-oss-20b | 15 |
-| Conductor | `ai_conductor` | conductor | OpenRouter | nvidia/nemotron-3-nano-30b-a3b:free | 8 |
+| Conductor | `ai_conductor` | conductor | OpenRouter | nvidia/nemotron-3-super-120b-a12b:free | 8 |
 | Archivist | `ai_archivist` | archivist | Groq | openai/gpt-oss-120b | 10 |
 | Research | `ai_research` | research | OpenRouter | nvidia/nemotron-3.5-lightning:free | 20 |
 
@@ -57,6 +57,7 @@ Provider lessons learned (full detail in `docs/OPERATIONS.md` incident log):
 - **OpenRouter free tier:** 20 req/min, 50–1000 req/day, no SLA, `:free` variants deprecate. JSON mode is **not enforced** on nemotron models (`response_format` unsupported → silently ignored); verdict correctness relies on prompt instructions + `lib/agents/json-helpers.ts`.
 - Always use the `:free` variant explicitly — the un-suffixed model is paid (bit us once).
 - Groq's free-plan GPT-OSS TPD is 200,000 tokens/day (official rate-limit table); the default AI Lab budget is 65% of that (130,000). Set `GROQ_DAILY_TPD_LIMIT` only when the organization's dashboard limit differs; invalid or non-positive values fall back to 200,000 rather than disabling the quota.
+- **OpenRouter free variants retire without notice.** `nvidia/nemotron-3-nano-30b-a3b:free` began 404ing ("unavailable for free") on 2026-10-15; only the paid slug remains. Conductor moved to `nvidia/nemotron-3-super-120b-a12b:free` with `maxTokens: 600` — reasoning models spend budget before the answer, so the old 120-token cap produced empty content. Re-run `scripts/check-agents.ts` when OpenRouter's free inventory shifts.
 - Theme research rotates across 14 UTC day slots; do not reintroduce a 7-day weekday rotation that repeats inside the 14-day novelty window.
 
 ---

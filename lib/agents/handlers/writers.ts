@@ -369,7 +369,7 @@ Identify the sharpest unresolved tension and pose it as one direct question. Fol
   const usage = { tokens: 0 };
   const response = await callAgent(agent, userPrompt, {
     temperature: 0.5,
-    maxTokens: 120,
+    maxTokens: 600,
     usageOut: usage,
   });
   await upsertUsage(

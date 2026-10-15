@@ -56,8 +56,11 @@ const MODELS = {
   maverick: process.env.AGENT_MODEL_MAVERICK ?? "openai/gpt-oss-20b",
 
   // Conductor: Groq llama-3.3 → gpt-oss-20b (2026-08-22) → OpenRouter free
-  // nemotron-nano (2026-08-22). Small precise task — nano is sufficient and fast (~1.7s).
-  conductor: process.env.AGENT_MODEL_CONDUCTOR ?? "nvidia/nemotron-3-nano-30b-a3b:free",
+  // nemotron-nano (2026-08-22) → free nemotron-super (2026-10-15 — the nano
+  // :free variant was retired upstream: 404 "unavailable for free", paid slug
+  // only). Super is a reasoning model, so the handler budgets 600 max tokens
+  // to leave room for reasoning plus the one-line question.
+  conductor: process.env.AGENT_MODEL_CONDUCTOR ?? "nvidia/nemotron-3-super-120b-a12b:free",
 
   // @research: Groq llama-3.3 → gpt-oss-20b (2026-08-22) → OpenRouter free
   // nemotron-lightning (2026-08-22). Fastest model tested (~1.4s) — good for
