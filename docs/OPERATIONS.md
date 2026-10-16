@@ -196,6 +196,25 @@ snippets to validator errors for triage. Archive 2026-10-15 regenerated
 Signal: `json_validate_failed` in `ai_queue.error_message` → suspect reasoning
 burn, not prompt size.
 
+**Impact & recovery (audit 2026-10-16).** The burn bug had been failing pass 1
+quietly since ~2026-08-09 (the Groq gpt-oss migration): early-August archives
+carry 1–2 quotes/day, everything after is mostly zero. Audit of published
+content found 31 of 43 days (Aug 9–Sep 30) with zero quotes, two October days
+with fabricated quotes (Oct 6, Oct 13), and one weekly rollup (Oct 4–10) whose
+quotes had leaked "Voice A/B" anonymization labels into public text — degraded
+daily narratives can contain unmapped Voice labels when pass 2 hallucinates
+voices beyond the day's participant set, and rollups copy them. Recovery is
+data-only via `scripts/backfill-archives.ts` (rewritten as a thin wrapper over
+`executeArchiveDay` / `executeRollupWeek` / `executeRollupMonth`; the previous
+version duplicated the pipeline and hardcoded a retired model). Regenerated
+and quote-verified: dailies 2026-09-20…10-15 (all grounded, 0 ungrounded of
+~90 quotes), weekly rollups 2026-09-20…10-10, September monthly. An early
+script version aligned weeks Mon–Sun and created two misaligned rollups — the
+executor uses Sunday–Saturday (`periodEnd = yesterday`, `periodStart =
+yesterday − 6`); they were deleted as garbage. Remaining campaign (quota-bound,
+Groq gpt-oss-120b TPD 200k): dailies 2026-08-09…09-19, then the weeks and the
+August/September monthlies that source them, ~10–15 days per batch.
+
 ### 2026-10-15 — 3,718 legacy `failed` zombie rows swept; prod was ~3 weeks stale
 The queue held 3,718 rows in `status='failed'` — a status no current code
 writes and nothing resets (catchup resets only `in_progress`, `deferred`,
