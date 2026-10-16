@@ -185,6 +185,14 @@ describe("executeMemoryReflection", () => {
     expect(memInserts[0].data.agentId).toBe("ai_llama");
     expect(memInserts[0].data.day).toBe("2026-08-12");
     expect(mockCallAgent).toHaveBeenCalledTimes(1);
+    // Regression guard (2026-10-15): the generation call must pin reasoning
+    // effort and keep headroom, or gpt-oss-120b's hidden chain-of-thought
+    // empties the answer and the observation is silently never inserted.
+    expect(mockCallAgent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.any(String),
+      expect.objectContaining({ maxTokens: 2000, reasoningEffort: "low" })
+    );
   });
 
   it("writes nothing when no agent posted or commented", async () => {

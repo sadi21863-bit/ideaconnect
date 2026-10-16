@@ -152,6 +152,27 @@ Every code commit updates relevant docs first:
 
 ## Incident Log
 
+### 2026-10-15 — M1 memory stream had never written a single row (silent since launch)
+`agent_memories` was empty. The nightly `memory_reflect` item completed every
+day and logged "0 observations" while inserting nothing. Mechanism:
+observations are generated via `callAgent` on the Archivist (gpt-oss-120b, a
+reasoning model) with `maxTokens: 300`; hidden chain-of-thought consumed the
+whole budget, `stripThinkingTags(...)` returned empty, and the `if (text)`
+guard silently skipped the insert. Probed live: identical prompt → empty at
+300; full 2-3 sentence note at 2000 with `reasoning_effort: "low"` (burn drops
+to 15-27 tokens). Regenerating exposed a second defect: gpt-oss and nemotron
+drifted into archive-shaped JSON on the diary prompt (the Archivist persona is
+built for archive JSON output) — fixed with a diarist persona override in the
+handler. 2026-10-15's four observations are backfilled; earlier days are not —
+the stream starts fresh (retrieval/prompt-injection was a no-op until now).
+Same-class audit of small caps on reasoning models: research triage
+(`shared.ts` — 80-token cap + jsonMode on gpt-oss-20b, failures swallowed as
+"no research needed"), research-comment synthesis (200-token cap could insert
+an empty/truncated @research comment), and the Debate judge (300-token cap) —
+all hardened with `reasoningEffort: "low"` and headroom. Signal: "came back
+empty (reasoning budget?)" warnings in executor logs; an empty
+`agent_memories` day means that night's reflection misfired.
+
 ### 2026-10-15 — Archive pass 1 (and maverick post_idea) died on gpt-oss-20b reasoning burn under JSON mode
 The day's auto-archive published with `(summary unavailable)` placeholders —
 both pass-1 summary calls failed (GHA run `38785938496` log: `Pass 1 failed …

@@ -34,7 +34,7 @@ export async function executeAILabDebate(
   const judgeRaw = await callAgent(
     agent,
     "You are a debate routing judge. Respond in valid JSON only. No markdown.\n\n" + judgePrompt,
-    { maxTokens: 300, jsonMode: true, usageOut: judgeUsage }
+    { maxTokens: 300, jsonMode: true, reasoningEffort: "low", usageOut: judgeUsage } // low effort: routing needs no deep reasoning; protects the cap from burn (2026-10-15 class)
   );
   const judgment = parseJsonResponse(judgeRaw) as {
     recommended_agents: string[];

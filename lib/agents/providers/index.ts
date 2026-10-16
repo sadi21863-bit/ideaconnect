@@ -60,6 +60,10 @@ export interface CallAgentOpts {
   temperature?: number;
   maxTokens?: number;
   jsonMode?: boolean;
+  /** Groq extension for reasoning models (gpt-oss): bounds the hidden
+   *  chain-of-thought burn. Passed through to callGroq; ignored by
+   *  callOpenRouter. See providers/groq.ts for the measured numbers. */
+  reasoningEffort?: "low" | "medium" | "high";
   /** Mutable box — callAgent fills it with provider-reported total tokens so
    *  callers can record real usage in aiUsage.tokens. */
   usageOut?: { tokens: number };

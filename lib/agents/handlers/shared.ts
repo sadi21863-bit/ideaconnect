@@ -57,11 +57,14 @@ Say no for topics that are philosophical, speculative, or based entirely on reas
 Respond in JSON only:
 {"needsResearch": true/false, "query": "2-5 word search query if yes, null if no"}`;
 
+    // jsonMode off + reasoningEffort low: gpt-oss-20b 400s / empties under
+    // response_format and hidden reasoning at this tiny cap (2026-10-15
+    // incident class); failures here were swallowed as "no research needed".
     const res = await callGroq(
       process.env.AGENT_MODEL_FALLBACK ?? "openai/gpt-oss-20b",
       "You are a research triage assistant. Respond in JSON only.",
       prompt,
-      { maxTokens: 80, jsonMode: true }
+      { maxTokens: 200, reasoningEffort: "low" }
     );
     if (usageAgentId) {
       await upsertUsage(
@@ -126,11 +129,14 @@ Current evidence: [one neutral sentence]
 No opinions. No predictions. Facts only.`;
 
   try {
+    // reasoningEffort low + raised cap: the 120-150 word synthesis needs
+    // ~200-250 tokens on top of hidden reasoning, which previously could
+    // empty or truncate the @research comment (2026-10-15 incident class).
     const res = await callGroq(
       process.env.AGENT_MODEL_FALLBACK ?? "openai/gpt-oss-20b",
       researchAgent.persona,
       synthesisPrompt,
-      { maxTokens: 200 }
+      { maxTokens: 600, reasoningEffort: "low" }
     );
 
     const [newComment] = await db

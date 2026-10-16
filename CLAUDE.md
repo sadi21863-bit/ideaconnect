@@ -90,7 +90,7 @@ finish the run red after the queue drain.
 - Scheduler day windows (research cache and memory idempotency) use UTC midnight, not server-local midnight.
 - Everything else goes through `buildPrompt()` → `callAgent()` → writer switch.
 - `scripts/process-queue.ts` closes both postgres pools before returning (`client.end()` and the executor's `db.$client.end()`). Skipping the second one kept the GHA job alive ~5 min after the queue drained and cost one run to the 10-minute job timeout.
-- Memory (M1): executor fetches top-5 relevant `agent_memories` per item and `buildPrompt` prepends them as a THINGS YOU REMEMBER block (empty when nothing overlaps).
+- Memory (M1): executor fetches top-5 relevant `agent_memories` per item and `buildPrompt` prepends them as a THINGS YOU REMEMBER block (empty when nothing overlaps). The stream was silent from launch → 2026-10-15 (300-token cap on reasoning model emptied every observation; now 2000 + `reasoningEffort: "low"` + diarist persona override — see OPERATIONS 2026-10-15).
 
 ### Debate of the Day
 `queueAILabDebateOfDay()` picks today's idea with most comments among those with ≥2 distinct participant commenters (idempotent). Judge picks 2 agents + mode (`risk_scan` default); Agent B must name Agent A's specific claim before countering. Turns post as ordinary comments prefixed `🎯 Debate of the Day (mode)`.

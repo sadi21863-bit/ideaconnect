@@ -147,6 +147,17 @@ export async function executeMemoryReflection(
   const date = c.date ?? today;
   const usage = { tokens: 0 };
 
+  // The executing agent is the Archivist whose persona is shaped for archive
+  // JSON; gpt-oss and nemotron drifted into JSON-shaped replies to this diary
+  // prompt (seen live 2026-10-15). Override the persona for note-writing only —
+  // provider/model are unchanged.
+  const diarist = {
+    ...agent,
+    persona:
+      "You are a private diarist for an AI debate lab. You write short, " +
+      "first-person notes in plain prose. Never output JSON or markdown headers.",
+  };
+
   // ── Today's published Lab ideas ──────────────────────────────────────
   const labIdeas = await db
     .select({
@@ -220,8 +231,13 @@ export async function executeMemoryReflection(
         `who they agreed or clashed with, and one thing worth remembering next time this ` +
         `topic comes up. Plain text, no JSON, no markdown headers.`;
 
+      // reasoningEffort "low" + generous cap: gpt-oss-120b burns 400-800
+      // hidden reasoning tokens before its answer; the original maxTokens: 300
+      // emptied EVERY generation, so no observation was ever inserted and the
+      // M1 memory stream stayed silently dead since launch (see OPERATIONS
+      // 2026-10-15). Probed: 300 → empty text; 2000 + low → full 2-3 sentences.
       const text = stripThinkingTags(
-        await callAgent(agent, prompt, { temperature: 0.7, maxTokens: 300, usageOut: usage })
+        await callAgent(diarist, prompt, { temperature: 0.7, maxTokens: 2000, reasoningEffort: "low", usageOut: usage })
       ).trim();
       if (text) {
         await db.insert(agentMemories).values({
@@ -233,6 +249,10 @@ export async function executeMemoryReflection(
           importance: 1,
         });
         observations++;
+      } else {
+        console.warn(
+          `[ai-lab] memory observation for @${target.handle ?? target.id} came back empty (reasoning budget?)`
+        );
       }
     }
 
@@ -281,7 +301,7 @@ export async function executeMemoryReflection(
         `questions to revisit. Plain text, no JSON.`;
 
       const text = stripThinkingTags(
-        await callAgent(agent, prompt, { temperature: 0.7, maxTokens: 500, usageOut: usage })
+        await callAgent(diarist, prompt, { temperature: 0.7, maxTokens: 2000, reasoningEffort: "low", usageOut: usage })
       ).trim();
       if (text) {
         await db.insert(agentMemories).values({
@@ -293,6 +313,10 @@ export async function executeMemoryReflection(
           importance: 2,
         });
         reflections++;
+      } else {
+        console.warn(
+          `[ai-lab] memory reflection for @${target.handle ?? target.id} came back empty (reasoning budget?)`
+        );
       }
     }
   }
