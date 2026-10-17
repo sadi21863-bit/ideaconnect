@@ -143,12 +143,15 @@ export async function executeArchiveDay(
       // "json_validate_failed"; without jsonMode the burn still varied
       // 507–1,132 tokens and once returned empty content. "low" pins it to
       // 15–27 tokens, output identical, parses via parseJsonResponse.
-      // See OPERATIONS 2026-10-15.
+      // maxTokens 3000 (was 2000): with the burn pinned low the cap is nearly
+      // pure output budget; 1-in-46 verbose summaries still truncated at 2000
+      // (2026-10-17 batch regeneration) — headroom is free, billing is per
+      // generated token. See OPERATIONS 2026-10-15.
       const res     = await callGroq(
         "openai/gpt-oss-20b",
         "You are a precise debate analyst. Respond with JSON only. No markdown fences.",
         summaryPrompt,
-        { temperature: 0.3, maxTokens: 2000, reasoningEffort: "low" }
+        { temperature: 0.3, maxTokens: 3000, reasoningEffort: "low" }
       );
       usage.tokens += res.totalTokens ?? 0;
       const p = parseJsonResponse(res.text) as { summary: string; quotes: Array<{ agent: string; text: string; context: string }> };

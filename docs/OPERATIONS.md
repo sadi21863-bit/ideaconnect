@@ -190,7 +190,9 @@ Fix: `openai/gpt-oss-20b` removed from `JSON_MODE_SUPPORTED` (callAgent strips
 `jsonMode` — fixes maverick and any fallback to 20b, which now gates
 `response_format` explicitly); archive pass 1, QC archive-review, and novelty
 call sites run without jsonMode (`maxTokens: 2000, reasoningEffort: "low"`,
-parsed via json-helpers); `callGroq` now appends non-empty `failed_generation`
+parsed via json-helpers; cap raised to 3000 on 2026-10-17 after ~1-in-50
+verbose summaries still truncated at 2000 — see campaign note below); `callGroq`
+now appends non-empty `failed_generation`
 snippets to validator errors for triage. Archive 2026-10-15 regenerated
 (id `276f0b96`): 4/4 quotes verified verbatim against source comments.
 Signal: `json_validate_failed` in `ai_queue.error_message` → suspect reasoning
@@ -211,9 +213,34 @@ and quote-verified: dailies 2026-09-20…10-15 (all grounded, 0 ungrounded of
 ~90 quotes), weekly rollups 2026-09-20…10-10, September monthly. An early
 script version aligned weeks Mon–Sun and created two misaligned rollups — the
 executor uses Sunday–Saturday (`periodEnd = yesterday`, `periodStart =
-yesterday − 6`); they were deleted as garbage. Remaining campaign (quota-bound,
-Groq gpt-oss-120b TPD 200k): dailies 2026-08-09…09-19, then the weeks and the
-August/September monthlies that source them, ~10–15 days per batch.
+yesterday − 6`); they were deleted as garbage. Campaign progress (2026-10-17,
+dailies regenerate via upsert — no queue rows involved): batches **Aug 30–Sep
+19** (21 days) and **Aug 20–29** done; `2026-08-27` is a genuinely empty lab
+day (no ideas, no archive row — nothing to regenerate); weeklies Aug 16–22 and
+Aug 23–29 regenerated from clean sources; September monthly final. Verified by
+quote-grounding audit: **Aug 20 → Oct 16 = 57 days, ~200 quotes, 2 marginal
+paraphrase misses (Sep 11, Sep 15)** — everything else verbatim. Production
+end-to-end confirmed on 2026-10-16 crons with fixed code (archive 2/2 quotes
+grounded; memory stream wrote 5 prose observations — first rows ever from a
+scheduled run). Remaining (quota-bound, Groq gpt-oss-120b TPD 200k): dailies
+**2026-08-09…08-19** (11 days), then week Aug 9–15 and the August monthly
+final pass. Script gotcha: the fake queue-item id in
+`scripts/backfill-archives.ts` must be a valid UUID — no-idea days hit the
+handler's early-return path and `UPDATE ai_queue WHERE id = '__backfill__'`
+throws on the uuid column (Aug 27, fixed with the all-zeros UUID). Residual
+pass-1 parse failures (~3–4% of calls, unescaped-quote class) degrade one
+idea's quotes to a placeholder; the day still publishes — accepted, not chased.
+A post-campaign CONTENT audit (2026-10-17) then found two defect classes the
+quote-grounding check cannot see, both fixed and re-verified: (1) compact and
+separator label variants (`voicea`, `voicec` as published quote authors) and
+plural prose (`Voices A and B`) bypassed `restoreVoiceLabels`, which only
+replaced exact strings — it now normalizes compact/underscore/dash/plural forms
+with English-collision guards (`voiced`, `the voice a listener hears`,
+`invoices` untouched; 5 new unit tests, 8 total); (2) pass 2 narrated a failed
+pass-1 input as "its summary was unavailable" in public prose (Aug 22).
+Aug 22, Aug 23 and Sep 12 were regenerated after the fix and re-verified (real
+agent handles, zero voice-label hits, all quotes grounded). A rollup-wide scan
+(19 rows, May→Oct) found zero remaining voice leaks.
 
 ### 2026-10-15 — 3,718 legacy `failed` zombie rows swept; prod was ~3 weeks stale
 The queue held 3,718 rows in `status='failed'` — a status no current code

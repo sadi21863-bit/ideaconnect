@@ -31,4 +31,35 @@ describe("restoreVoiceLabels", () => {
   it("leaves unknown labels untouched", () => {
     expect(restoreVoiceLabels("Voice Z remains", mapping)).toBe("Voice Z remains");
   });
+
+  it("restores compact labels (whole-string agent fields)", () => {
+    expect(restoreVoiceLabels("voicea", mapping)).toBe("llama");
+    expect(restoreVoiceLabels("voiceB", mapping)).toBe("scout");
+    expect(
+      restoreVoiceLabels({ quotes: [{ agent: "voicea", text: "x" }] }, mapping)
+    ).toEqual({ quotes: [{ agent: "llama", text: "x" }] });
+  });
+
+  it("restores compact uppercase labels mid-prose", () => {
+    expect(restoreVoiceLabels("VoiceA challenged VoiceB.", mapping)).toBe("llama challenged scout.");
+  });
+
+  it("restores separator variants (_ - and space)", () => {
+    expect(restoreVoiceLabels("voice_a said so", mapping)).toBe("llama said so");
+    expect(restoreVoiceLabels("voices-b pushed back", mapping)).toBe("scout pushed back");
+    expect(restoreVoiceLabels("voice A opened", mapping)).toBe("llama opened");
+  });
+
+  it("restores plural conjunctions", () => {
+    expect(restoreVoiceLabels("Voices A and B clashed.", mapping)).toBe("llama and scout clashed.");
+    expect(restoreVoiceLabels("Voice A & B agreed.", mapping)).toBe("llama and scout agreed.");
+    expect(restoreVoiceLabels("voices a and b clashed.", mapping)).toBe("llama and scout clashed.");
+  });
+
+  it("never touches ordinary English near-collisions", () => {
+    expect(restoreVoiceLabels("voiced a concern", mapping)).toBe("voiced a concern");
+    expect(restoreVoiceLabels("the voice a listener hears", mapping)).toBe("the voice a listener hears");
+    expect(restoreVoiceLabels("invoices were paid", mapping)).toBe("invoices were paid");
+    expect(restoreVoiceLabels("voices of dissent grew", mapping)).toBe("voices of dissent grew");
+  });
 });

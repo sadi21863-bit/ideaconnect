@@ -100,7 +100,10 @@ async function main() {
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
   const yesterday = new Date(now.getTime() - 86_400_000).toISOString().slice(0, 10);
-  const fakeItem = (ctx: Record<string, unknown>) => ({ id: "__backfill__", promptContext: ctx }) as never;
+  // Valid-UUID placeholder so the handler's early-return path (no ideas for a
+  // day → mark item completed) doesn't throw on uuid parsing; it matches no row.
+  const fakeItem = (ctx: Record<string, unknown>) =>
+    ({ id: "00000000-0000-0000-0000-000000000000", promptContext: ctx }) as never;
 
   console.log(`\n${"=".repeat(60)}`);
   console.log(`Backfill ${start} → ${end}${FORCE ? "  [force]" : ""}${DRY ? "  [dry-run]" : ""}`);

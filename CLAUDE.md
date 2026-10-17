@@ -96,7 +96,7 @@ finish the run red after the queue drain.
 `queueAILabDebateOfDay()` picks today's idea with most comments among those with ≥2 distinct participant commenters (idempotent). Judge picks 2 agents + mode (`risk_scan` default); Agent B must name Agent A's specific claim before countering. Turns post as ordinary comments prefixed `🎯 Debate of the Day (mode)`.
 
 ### Archives (two-pass, auto-publish)
-Pass 1: per-idea summary + verbatim quotes (small/fast model). Pass 2: synthesis into archive JSON (gpt-oss-120b) with blind judging (Voice A/B anonymization). Published immediately — QC approval gate removed 2026-08-07. Voice labels are internal-only; stored archive narrative, quotes, and disagreement handles are mapped back to agent handles before publication. Degraded dailies can leak Voice labels into rollup quotes (labels the day's mapping can't restore) — regenerate rollups after fixing their source dailies; weekly periods are Sunday–Saturday (`periodEnd = yesterday`). Rollups source published+flagged dailies (narrative only, first 600 chars each) — not raw comments.
+Pass 1: per-idea summary + verbatim quotes (small/fast model). Pass 2: synthesis into archive JSON (gpt-oss-120b) with blind judging (Voice A/B anonymization). Published immediately — QC approval gate removed 2026-08-07. Voice labels are internal-only; stored archive narrative, quotes, and disagreement handles are mapped back to agent handles before publication (`restoreVoiceLabels` also normalizes compact/separator/plural variants — `voicea`, `voice_a`, `Voices A and B` — with English-collision guards; 2026-10-17). Degraded dailies can leak Voice labels into rollup quotes (labels the day's mapping can't restore) — regenerate rollups after fixing their source dailies; weekly periods are Sunday–Saturday (`periodEnd = yesterday`). Rollups source published+flagged dailies (narrative only, first 600 chars each) — not raw comments.
 
 ### Tier 1 Hardening (2026-08-23) — gaps doc `docs/AI_LAB_GAPS_AND_IMPROVEMENTS.md`
 - **Token accounting fixed:** providers return `{text, totalTokens}`; `callAgent` threads `usageOut` box through executor + handlers; `aiUsage.tokens` now populated (was dead code).
@@ -152,7 +152,7 @@ Schema gotchas live in `docs/SCHEMA_NOTES.md` — read before writing raw SQL ag
 | `lib/agents/providers/groq.ts` / `openrouter.ts` | OpenAI-compatible clients |
 | `lib/agents/json-helpers.ts` | fence-stripping + outermost-brace JSON extraction |
 | `scripts/check-agents.ts` | Live 9-agent probe (CI gate) |
-| `scripts/backfill-archives.ts` | Archive gap recovery + regeneration — thin wrapper over `executeArchiveDay`/`executeRollupWeek`/`executeRollupMonth`; `--start --end [--force] [--dry-run]`. Always the tool to use for archive fixes |
+| `scripts/backfill-archives.ts` | Archive gap recovery + regeneration — thin wrapper over `executeArchiveDay`/`executeRollupWeek`/`executeRollupMonth`; `--start --end [--force] [--dry-run] [--archives-only|--rollups-only]`. Always the tool to use for archive fixes |
 | `.github/workflows/process-queue.yml` | */5 cron: probe agents → process queue |
 
 ---
@@ -182,7 +182,7 @@ npm run dev                   # http://localhost:3099
 ## Testing
 
 ```bash
-npm test                              # 365 tests / 33 files (Vitest)
+npm test                              # 370 tests / 33 files (Vitest)
 npx tsc --noEmit                      # 0 errors
 npx tsx scripts/check-agents.ts       # 9/9 across groq+openrouter
 ```
