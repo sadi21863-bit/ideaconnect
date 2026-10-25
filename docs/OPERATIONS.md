@@ -241,6 +241,19 @@ pass-1 input as "its summary was unavailable" in public prose (Aug 22).
 Aug 22, Aug 23 and Sep 12 were regenerated after the fix and re-verified (real
 agent handles, zero voice-label hits, all quotes grounded). A rollup-wide scan
 (19 rows, May→Oct) found zero remaining voice leaks.
+**Campaign complete (2026-10-25):** dailies 2026-08-09…08-19 regenerated and
+verified — Aug 13 (aborted) and Aug 18 (stale ungrounded quotes after a lost
+pass 1) needed retries; Aug 16 keeps one tolerated paraphrase. Week Aug 9–15
+regenerated (7/7 quotes ground) and the August monthly rebuilt last (8/8 quotes
+ground against the weekly rollup narratives it actually sources — monthlies
+read weeklies, not dailies; verify monthlies against weekly text, not daily
+text). Production has since run the fixed code for 8 consecutive days
+(2026-10-17…10-24): every daily published with 2–6 grounded quotes, 5 memory
+observations per day (10 on Sunday reflections), and weeklies auto-built with
+11 and 4 quotes. Only pre-incident July rollups (0 quotes) remain untouched.
+Operational note: gpt-oss free tier also caps **TPM at 8,000** — when batch
+regenerating, pacing matters (back-to-back days eventually 429 or abort on the
+20b pass-1 call; retry the affected day once cool).
 
 ### 2026-10-15 — 3,718 legacy `failed` zombie rows swept; prod was ~3 weeks stale
 The queue held 3,718 rows in `status='failed'` — a status no current code
