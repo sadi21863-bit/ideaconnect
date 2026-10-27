@@ -152,6 +152,27 @@ Every code commit updates relevant docs first:
 
 ## Incident Log
 
+### 2026-10-27 — OpenRouter retired `nemotron-3-super-120b-a12b:free`; probe gate reddened every GHA run
+The super slug followed the nano variant into limited retirement: 404
+"Provider returned error" on every call while still listed in `/v1/models`
+(the known listed-but-unavailable pattern). Because `process-queue.yml`
+deliberately finishes red when the agent probe fails, **every scheduled run
+appeared as a failure** for days while the queue itself processed normally —
+check the "Fail if agent health check failed" step before assuming the
+pipeline is down. Conductor moved to `nvidia/nemotron-3.5-super-vl:free`.
+Critical: at the old 600-token cap this model (like lightning) returns HTTP
+200 with EMPTY content — ~490 completion tokens go to hidden reasoning before
+the answer, and the writer treats empty text as "debate resolved → SKIP", so
+the break would be silent. The conductor writer now budgets 2000. The probe
+`scripts/check-agents.ts` only requests 10 tokens, so it cannot catch
+empty-output-at-budget — when swapping a reasoning model, probe it directly
+with the real cap. Also rejected: `google/gemma-4-31b-it:free` (429) and
+`thinkingmachines/inkling:free` (403, "agentic harnesses only"). Verified 9/9
+probe + real conductor prompt (correct @handle question, ~6s). Separately, the
+workflow's health-report step is inert: `APP_URL`/`CRON_SECRET` resolve empty
+in GHA (`secrets.NEXT_PUBLIC_APP_URL` unset), so
+`/api/internal/agent-health-report` is never called.
+
 ### 2026-10-15 — M1 memory stream had never written a single row (silent since launch)
 `agent_memories` was empty. The nightly `memory_reflect` item completed every
 day and logged "0 observations" while inserting nothing. Mechanism:

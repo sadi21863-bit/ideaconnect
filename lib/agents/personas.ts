@@ -60,7 +60,13 @@ const MODELS = {
   // :free variant was retired upstream: 404 "unavailable for free", paid slug
   // only). Super is a reasoning model, so the handler budgets 600 max tokens
   // to leave room for reasoning plus the one-line question.
-  conductor: process.env.AGENT_MODEL_CONDUCTOR ?? "nvidia/nemotron-3-super-120b-a12b:free",
+  // 2026-10-27: super-120b:free followed the nano variant into upstream
+  // retirement (404 while still listed in /v1/models) and broke every GHA run
+  // via the probe gate. Now nemotron-3.5-super-vl:free. NOTE reasoning burn:
+  // at maxTokens 600 this model returns HTTP 200 with EMPTY content (the whole
+  // completion budget goes to hidden reasoning); the conductor writer budgets
+  // 2000. Direct probe: 493 completion tokens, correct question, ~6s.
+  conductor: process.env.AGENT_MODEL_CONDUCTOR ?? "nvidia/nemotron-3.5-super-vl:free",
 
   // @research: Groq llama-3.3 → gpt-oss-20b (2026-08-22) → OpenRouter free
   // nemotron-lightning (2026-08-22). Fastest model tested (~1.4s) — good for

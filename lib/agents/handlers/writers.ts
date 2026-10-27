@@ -369,7 +369,11 @@ Identify the sharpest unresolved tension and pose it as one direct question. Fol
   const usage = { tokens: 0 };
   const response = await callAgent(agent, userPrompt, {
     temperature: 0.5,
-    maxTokens: 600,
+    // 2026-10-27: 600 emptied every response on reasoning models — nemotron
+    // super-vl spends ~490 completion tokens reasoning before the question, so
+    // the cap must cover reasoning + the one-liner (empty text used to look
+    // like a resolved debate: `cleaned` empty -> "SKIP").
+    maxTokens: 2000,
     usageOut: usage,
   });
   await upsertUsage(
