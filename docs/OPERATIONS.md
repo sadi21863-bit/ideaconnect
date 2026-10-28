@@ -183,7 +183,7 @@ probes the same chain and now reports "OK via fallback" plus a `::warning::`
 instead of reddening the run when only the primary is retired; it fails only if
 the entire chain fails.
 
-Same commit: the cross-provider Groq fallback used to force `maxTokens: 600`,
+Follow-up commit (2026-10-28): the cross-provider Groq fallback used to force `maxTokens: 600`,
 discarding the resolved budget — Conductor's explicit 2000 and the new JSON-mode
 2500 floor. During an OpenRouter outage that would make `gpt-oss-20b` spend the
 whole cap on reasoning and return EMPTY, which the Conductor reads as "debate
