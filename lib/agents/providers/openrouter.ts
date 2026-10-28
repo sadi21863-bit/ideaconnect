@@ -18,11 +18,21 @@ export async function callOpenRouter(
   model: string,
   system: string,
   user: string,
-  opts: { temperature?: number; maxTokens?: number; jsonMode?: boolean; timeoutMs?: number } = {}
+  opts: {
+    temperature?: number;
+    maxTokens?: number;
+    jsonMode?: boolean;
+    timeoutMs?: number;
+    /** OpenRouter priority-ordered fallbacks, sent as the `models` array. */
+    fallbackModels?: string[];
+  } = {}
 ): Promise<ProviderResult> {
   const openrouter = getOpenRouter();
-  const params: Parameters<typeof openrouter.chat.completions.create>[0] = {
-    model,
+  const fallbacks = (opts.fallbackModels ?? []).filter((m) => m && m !== model);
+  // `model` and `models` are mutually exclusive on OpenRouter. With `models`,
+  // the primary must be the first entry; OpenRouter falls through on 404/429/
+  // 5xx/moderation and reports the model that served in `response.model`.
+  const params: Record<string, unknown> = {
     messages: [
       { role: "system", content: system },
       { role: "user",   content: user },
@@ -31,6 +41,11 @@ export async function callOpenRouter(
     max_tokens:  opts.maxTokens  ?? 600,
     stream:      false,
   };
+  if (fallbacks.length > 0) {
+    params.models = [model, ...fallbacks];
+  } else {
+    params.model = model;
+  }
 
   // response_format passthrough — OpenRouter forwards it to providers that
   // support native JSON mode. Verified live 2026-08-22 via
@@ -57,13 +72,17 @@ export async function callOpenRouter(
     "X-Title": "IdeaConnect AI Lab",
   };
 
-  const response = await openrouter.chat.completions.create(params, {
-    signal: AbortSignal.timeout(opts.timeoutMs ?? 45_000),
-    // @ts-ignore — extra headers allowed per-request
-    headers: extraHeaders,
-  }) as unknown as {
+  const response = await openrouter.chat.completions.create(
+    params as unknown as Parameters<typeof openrouter.chat.completions.create>[0],
+    {
+      signal: AbortSignal.timeout(opts.timeoutMs ?? 45_000),
+      // @ts-ignore — extra headers allowed per-request
+      headers: extraHeaders,
+    }
+  ) as unknown as {
     choices?: Array<{ message: { content: string | null } }>;
     usage?: { total_tokens?: number };
+    model?: string;
   };
   // A 200 response without `choices` is malformed (provider/proxy hiccup).
   // Throw a 502-class error so isTransientError triggers the Groq fallback
@@ -73,6 +92,14 @@ export async function callOpenRouter(
     throw Object.assign(
       new Error(`OpenRouter returned no choices for ${model} (malformed 200 response)`),
       { status: 502 }
+    );
+  }
+  // With a fallback chain the response reports the concrete model that served.
+  // Log only when the chain fired so a retirement is visible in production logs
+  // without editing code (and without adding noise on the normal path).
+  if (fallbacks.length > 0 && response.model && response.model !== model) {
+    console.warn(
+      `[openrouter] primary ${model} unavailable; served by ${response.model}`
     );
   }
   const text = choice.message?.content ?? "";

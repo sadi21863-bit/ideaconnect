@@ -22,6 +22,11 @@ export interface Agent {
    *  doesn't specify opts.maxTokens. Reasoning models (GPT-OSS) need a higher
    *  floor than the Groq provider default. */
   maxTokens?: number;
+  /** OpenRouter-only: priority-ordered fallback slugs sent as the `models`
+   *  array. OpenRouter tries them in order when the primary 404s, 429s, 5xxs
+   *  or is moderation-blocked, and reports the model that actually served in
+   *  `response.model`. This is what makes free-tier retirements a non-event. */
+  fallbackModels?: string[];
 }
 
 // ─── MODEL IDS VIA ENV VARS ──────────────────────────────────────────
@@ -58,8 +63,8 @@ const MODELS = {
   // Conductor: Groq llama-3.3 → gpt-oss-20b (2026-08-22) → OpenRouter free
   // nemotron-nano (2026-08-22) → free nemotron-super (2026-10-15 — the nano
   // :free variant was retired upstream: 404 "unavailable for free", paid slug
-  // only). Super is a reasoning model, so the handler budgets 600 max tokens
-  // to leave room for reasoning plus the one-line question.
+  // only). Super is a reasoning model: the handler budgets 2000 (at 600 the
+  // model returns HTTP 200 with empty content).
   // 2026-10-27: super-120b:free followed the nano variant into upstream
   // retirement (404 while still listed in /v1/models) and broke every GHA run
   // via the probe gate. Now nemotron-3.5-super-vl:free. NOTE reasoning burn:
@@ -74,6 +79,41 @@ const MODELS = {
   // NOTE: must be the ":free" variant — the un-suffixed lightning model is PAID.
   research: process.env.AGENT_MODEL_RESEARCH ?? "nvidia/nemotron-3.5-lightning:free",
 };
+
+// ─── OPENROUTER FALLBACK CHAINS ──────────────────────────────────────
+// OpenRouter free variants retire without notice (nano 2026-10-15, super-120b
+// 2026-10-27) and a retired slug 404s while STILL appearing in /v1/models.
+// Instead of hardcoding one slug and editing code on every retirement, each
+// OpenRouter agent sends `models: [primary, ...fallbacks]` — OpenRouter's
+// priority-ordered fallback array — and falls through on 404/429/5xx/
+// moderation. The response reports which model actually served.
+//
+// `openrouter/free` is the last entry everywhere. It random-routes across the
+// free pool; probed 2026-10-27 with our real prompts it scored 6/16 usable and
+// selected a content-safety classifier ("User Safety: safe") and a 2.6B model.
+// It is a LAST RESORT ONLY, never a primary.
+//
+// Every entry must stay `:free` (or `openrouter/free`): a paid slug here would
+// silently start billing. OpenRouter caps the array at THREE entries, so each
+// chain is primary + one hand-picked fallback + the free router.
+// Caveats: fallback does NOT trigger on HTTP 200 with
+// empty content (reasoning burn), so token budgets still matter; and an unknown
+// model ID 400s the whole request instead of falling back, so list only real
+// slugs (a retired `:free` variant of a known base slug is tolerated).
+const MODEL_FALLBACKS = {
+  scout: [
+    "nvidia/nemotron-3.5-super-vl:free",   // verified JSON mode 2026-10-27
+    "openrouter/free",
+  ],
+  conductor: [
+    "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "openrouter/free",
+  ],
+  research: [
+    "nvidia/nemotron-3.5-super-vl:free",
+    "openrouter/free",
+  ],
+} as const satisfies Record<string, readonly string[]>;
 
 // ─── ADMIN TIER ──────────────────────────────────────────────────────
 
@@ -217,6 +257,7 @@ ${BRUTAL_HONESTY_RULE}`,
     handle: "scout",
     provider: "openrouter",
     model: MODELS.scout, // nvidia/nemotron-3-ultra (free tier)
+    fallbackModels: [...MODEL_FALLBACKS.scout],
     role: "participant",
     persona: `You are Scout, an AI participant in the IdeaConnect AI Lab. You are the Pattern Breaker — fast, direct, and structurally skeptical.
 
@@ -346,6 +387,7 @@ const CONDUCTOR_AGENT: Agent = {
   // (GitHub Models retirement brownout).
   provider: "openrouter",
   model: MODELS.conductor,
+  fallbackModels: [...MODEL_FALLBACKS.conductor],
   role: "conductor",
   persona: `You are the Conductor for IdeaConnect's AI Lab. Your sole function is to restart stalled debates.
 
@@ -377,6 +419,7 @@ const RESEARCH_AGENT: Agent = {
   // Groq llama-3.3 (2026-08-07) → OpenRouter nemotron-lightning (2026-08-22).
   provider: "openrouter",
   model: MODELS.research,
+  fallbackModels: [...MODEL_FALLBACKS.research],
   role: "research",
   persona: `You are @research, the AI Lab's real-time fact-checker.
 

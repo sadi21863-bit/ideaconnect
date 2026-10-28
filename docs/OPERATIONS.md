@@ -127,13 +127,16 @@ Applied through **0018**. Dropped-table ledger lives in `SCHEMA_NOTES.md`.
 Both providers retire models without notice. When changing a model:
 
 1. Update default in `lib/agents/personas.ts` `MODELS` (keep the comment trail)
-2. If JSON output needed: live-probe, then update `JSON_MODE_SUPPORTED` in
+2. Update the agent's `fallbackModels` chain (OpenRouter only): priority order,
+   every entry `:free` or `openrouter/free`, last entry `openrouter/free`
+3. If JSON output needed: live-probe, then update `JSON_MODE_SUPPORTED` in
    `providers/index.ts` — unsupported providers silently ignore `response_format`
-3. Update overrides in `.env` AND `.env.local` (they shadow personas defaults)
-4. Re-run `npx tsx scripts/seed-ai-agents.ts` (syncs users rows)
-5. `npx tsx scripts/check-agents.ts` must show 9/9
-6. Mirror key/model values into Vercel + GHA env if provider-level
-7. Update agent tables in CLAUDE.md + README.md + this file
+4. Update overrides in `.env` AND `.env.local` (they shadow personas defaults)
+5. Re-run `npx tsx scripts/seed-ai-agents.ts` (syncs users rows)
+6. `npx tsx scripts/check-agents.ts` must show 9/9. "OK via fallback" means the
+   primary is retired but production still serves — prune the chain, not an outage
+7. Mirror key/model values into Vercel + GHA env if provider-level
+8. Update agent tables in CLAUDE.md + README.md + this file
 
 ## MD File Update Policy
 
@@ -151,6 +154,34 @@ Every code commit updates relevant docs first:
 ---
 
 ## Incident Log
+
+### 2026-10-27 — `openrouter/free` evaluated; retirement-proof fallback chains adopted
+Question: can every OpenRouter call site use the Free Models Router
+(`openrouter/free`) so free-tier retirements stop requiring code changes?
+Docs: it randomly selects among available free models, filtering only on
+capability (vision/tools/structured output) — not on quality or persona fit.
+Probed 16 requests with our real prompt shapes: **6/16 usable**. JSON idea
+output was 2/4 (one invalid, one HTTP 200 with EMPTY content after burning all
+2,500 tokens); research triage at 200 tokens was 0/3 (all empty); conductor at
+2,000 was 3/3 but with random models. The pool included
+`nvidia/nemotron-3.5-content-safety:free` (returned "User Safety: safe" instead
+of content), `liquid/lfm-2.5-2.6b:free` (2.6B, empty at 200), and code-tuned
+models. Verdict: **rejected as a primary** — random selection breaks persona
+consistency and JSON reliability.
+
+Adopted instead: OpenRouter's `models` fallback array (priority order, falls
+through on 404/429/5xx/moderation, response reports the concrete `model`).
+Every OpenRouter agent now carries `fallbackModels`, ending in
+`openrouter/free` as a last resort. The array is capped at **3 entries total**
+(primary + 2); a 4th returns HTTP 400 `'models' array must have 3 items or
+fewer` — caught by the probe, not by types. Verified: retired
+`super-120b:free` first → served by `super-vl:free` in ~1.8s. Caveats: fallback
+does NOT trigger on HTTP 200 with empty content (reasoning burn still needs
+adequate budgets), and an unknown model ID 400s the whole request (retired
+`:free` variants of known base slugs are tolerated). `scripts/check-agents.ts`
+probes the same chain and now reports "OK via fallback" plus a `::warning::`
+instead of reddening the run when only the primary is retired; it fails only if
+the entire chain fails.
 
 ### 2026-10-27 — OpenRouter retired `nemotron-3-super-120b-a12b:free`; probe gate reddened every GHA run
 The super slug followed the nano variant into limited retirement: 404

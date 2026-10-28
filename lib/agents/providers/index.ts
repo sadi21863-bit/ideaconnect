@@ -36,7 +36,15 @@ const JSON_MODE_SUPPORTED = new Set([
   // OpenRouter free tier — verified live 2026-08-22 (scripts/test-openrouter-json.ts)
   "nvidia/nemotron-3-ultra-550b-a55b:free",
   "nvidia/nemotron-3.5-lightning",
+  "nvidia/nemotron-3.5-lightning:free",
   "nvidia/nemotron-3-nano-30b-a3b:free",
+  // 2026-10-27: super-vl verified with response_format json_object (valid
+  // title/pitch/content JSON, 535 completion tokens) as Scout's fallback.
+  "nvidia/nemotron-3.5-super-vl:free",
+  // The free router filters candidates by capability when response_format is
+  // present. JSON validity is only ~50% (probed 2026-10-27), which is why it is
+  // the LAST fallback entry, never a primary.
+  "openrouter/free",
 ]);
 
 // GPT-OSS is a reasoning model that can consume many tokens on chain-of-thought
@@ -80,16 +88,30 @@ export async function callAgent(
     // Don't forward jsonMode for models that don't support it
     delete primaryOpts.jsonMode;
   }
-  // Use opts.maxTokens if given; else fall back to agent.maxTokens; else GPTOSS_MIN_TOKENS floor.
+  // Use opts.maxTokens if given; else fall back to agent.maxTokens; else a
+  // budget floor. JSON outputs get 2500: a reasoning model can burn the whole
+  // completion budget before emitting the JSON (empty HTTP 200), which
+  // json-helpers cannot recover from. Extra headroom is free — models stop.
+  const JSON_MIN_TOKENS = 2500;
   if (!primaryOpts.maxTokens) {
-    primaryOpts.maxTokens = agent.maxTokens
-      ?? (agent.model === GPTOSS_MODEL ? GPTOSS_MIN_TOKENS : undefined);
+    primaryOpts.maxTokens =
+      agent.maxTokens ??
+      (primaryOpts.jsonMode
+        ? JSON_MIN_TOKENS
+        : agent.model === GPTOSS_MODEL
+          ? GPTOSS_MIN_TOKENS
+          : undefined);
   }
   delete (primaryOpts as Partial<CallAgentOpts>).usageOut;
 
   const callPrimary = () =>
     agent.provider === "openrouter"
-      ? callOpenRouter(agent.model, agent.persona, userPrompt, primaryOpts)
+      ? callOpenRouter(agent.model, agent.persona, userPrompt, {
+          ...primaryOpts,
+          // Priority-ordered free fallbacks: a retired primary 404s through to
+          // the next slug instead of dead-lettering the item.
+          fallbackModels: agent.fallbackModels,
+        })
       : callGroq(agent.model, agent.persona, userPrompt, primaryOpts);
 
   try {
