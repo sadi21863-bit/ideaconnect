@@ -108,7 +108,8 @@ describe("callAgent — Groq fallback on transient errors", () => {
       "openai/gpt-oss-20b",
       groqAgent.persona,
       "prompt",
-      expect.objectContaining({ maxTokens: 600 })
+      // Carries the primary's resolved budget (GPTOSS floor 2500), not 600.
+      expect.objectContaining({ maxTokens: 2500 })
     );
     expect(result).toBe("fallback answer");
   });
@@ -126,7 +127,7 @@ describe("callAgent — Groq fallback on transient errors", () => {
       "openai/gpt-oss-20b",
       expect.any(String),
       "prompt",
-      expect.objectContaining({ maxTokens: 600 })
+      expect.objectContaining({ maxTokens: 2500 })
     );
     expect(result).toBe("fallback ok");
   });
@@ -144,7 +145,24 @@ describe("callAgent — Groq fallback on transient errors", () => {
       "openai/gpt-oss-20b",
       expect.any(String),
       "prompt",
-      expect.objectContaining({ maxTokens: 600 })
+      expect.objectContaining({ maxTokens: 2500 })
+    );
+  });
+
+  it("carries an explicit caller budget (e.g. conductor 2000) to the fallback", async () => {
+    const rateLimitErr = Object.assign(new Error("rate limit"), { status: 429 });
+    mockCallGroq
+      .mockRejectedValueOnce(rateLimitErr)
+      .mockResolvedValueOnce({ text: "fallback answer", totalTokens: 10 });
+
+    await callAgent(groqAgent, "prompt", { maxTokens: 2000 });
+
+    expect(mockCallGroq).toHaveBeenNthCalledWith(
+      2,
+      "openai/gpt-oss-20b",
+      groqAgent.persona,
+      "prompt",
+      expect.objectContaining({ maxTokens: 2000 })
     );
   });
 

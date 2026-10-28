@@ -133,7 +133,14 @@ export async function callAgent(
       // Gate jsonMode here too: `opts` is the raw caller request, so without
       // this the fallback could forward response_format to a model that 400s
       // on it (gpt-oss-20b since 2026-10-15 — see JSON_MODE_SUPPORTED above).
-      const fbOpts = { ...opts, maxTokens: 600 };
+      //
+      // Carry the RESOLVED budget (primaryOpts), not a hardcoded 600. Forcing
+      // 600 discarded explicit/computed caps — Conductor 2000 and the JSON-mode
+      // 2500 floor — so a provider outage would make gpt-oss-20b burn the whole
+      // budget on reasoning and return EMPTY: the conductor then reads that as
+      // "debate resolved → SKIP" (silent break). Budgets are still bounded by
+      // the caller/agent; the fallback is rare.
+      const fbOpts = { ...opts, maxTokens: primaryOpts.maxTokens ?? 600 };
       if (fbOpts.jsonMode && !JSON_MODE_SUPPORTED.has(FALLBACK_MODEL)) delete fbOpts.jsonMode;
       const fb = await callGroq(FALLBACK_MODEL, agent.persona, userPrompt, fbOpts);
       if (opts?.usageOut && fb.totalTokens) opts.usageOut.tokens += fb.totalTokens;

@@ -183,6 +183,13 @@ probes the same chain and now reports "OK via fallback" plus a `::warning::`
 instead of reddening the run when only the primary is retired; it fails only if
 the entire chain fails.
 
+Same commit: the cross-provider Groq fallback used to force `maxTokens: 600`,
+discarding the resolved budget — Conductor's explicit 2000 and the new JSON-mode
+2500 floor. During an OpenRouter outage that would make `gpt-oss-20b` spend the
+whole cap on reasoning and return EMPTY, which the Conductor reads as "debate
+resolved → SKIP". It now carries the resolved budget (still bounded by
+caller/agent); the fallback path is rare.
+
 ### 2026-10-27 — OpenRouter retired `nemotron-3-super-120b-a12b:free`; probe gate reddened every GHA run
 The super slug followed the nano variant into limited retirement: 404
 "Provider returned error" on every call while still listed in `/v1/models`
